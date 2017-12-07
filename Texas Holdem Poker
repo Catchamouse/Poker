@@ -1,0 +1,1886 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+
+namespace Poker {
+    class Program {
+        /*Combination strength: High card = 1, One pair = 2, Two pairs = 3, Three of a kind = 4, Straight = 5, 
+         Flush = 6, Full house = 7, Four of a kind = 8, Straight flush = 9, Royal flush = 10*/
+        static int numberOfPlayers; static bool numberOfPlayersOK; static int numberOfActivePlayers;
+        static byte playerCards = 2;
+        static Card[] CardsArray;               
+        static byte[,] values; static byte numberOfValues = 13; static char[,] colors; static byte numberOfColors = 4;
+        static char[] colorsNames; static byte[,] playerColors;       
+        static byte[] combinationStrength; static int[] combinationCardHeight; static int[,] combinationCardHeight2;
+        static int[] combinationHighCardHeight; static int[] combinationOnePairCardHeight; static int[,] combinationTwoPairsCardHeight;
+        static int[] combinationThreeOfAKindCardHeight; static int[] combinationStraightCardHeight; static int[,] combinationFlushCardHeight;
+        static int[,] combinationFullHouseCardsHeight; static int[] combinationFourOfAKindCardHeight; static int[] combinationStraightFlushCardHeight;
+        static byte tableAndOnePlayerCards = 7; static byte combinationCards = 5; static byte playerCards2 = 2;
+        static bool[] isFlush; static bool[] isStraight;
+        static byte[,] flushCardsValues; static byte[] numberOfFlushCards;
+        static bool[,] isTableCardInCombination; static bool[,] isPlayerCardInCombination; static byte[] flushColor;
+        static int dealerNumber; static bool[] hasSmallBlind; static bool[] hasBigBlind;
+        static int[] winnerNumber; static string[] playersNames; static int[] positionOfPlayersInTurn;
+        static bool[] isPlayerOut; static bool[] hasFolded; static bool[] isAllIn; static bool hasAllExceptOneFolds = false;
+        static bool isUncalledBet = true; static int numberOfPlayerWithUncalledBet;  static long uncalledBet;
+        static bool isWinnerOfTournament = false; static long[] playerChips; static int positionOfUnderTheGun;
+        static long[] sidePots; static int numberOfSidePots; static int maxNumberOfPlayers = 9;
+        static int[] idNumberOfPlayerOrderedByBet; static int[] numberToIdentifyContestants; static bool isAnySidePot;
+        static long previousRaise; static long[] playerBet;
+
+        public class Card { //definice karet
+            public string cardDescription;
+            public byte cardValue;
+            public char cardColor;
+            public Card(string cardDescription, byte cardValue, char cardColor) {
+                this.cardDescription = cardDescription;
+                this.cardValue = cardValue;
+                this.cardColor = cardColor;
+            }
+        }
+        public class EmptyNameException : Exception {
+            public EmptyNameException(string s) : base(s) { }
+        }
+        public class SameNameException : Exception {
+            public SameNameException(string s) : base(s) { }           
+        }
+
+        public static void cardMixing(ref Card[] MixedCards) { //metoda pro míchání karet
+            MixedCards = new Card[52];
+            bool[] IsCardInserted = new bool[52];
+            byte k;
+            for (k = 0; k < 52; k++) {
+                IsCardInserted[k] = false;
+            }
+            Random r = new Random();
+            short i, j;
+            for (i = 0; i < 52; i++) {
+                j = (short)(r.NextDouble() * 52);
+                if (IsCardInserted[j] == true) {
+                    i--;
+                } else if (IsCardInserted[j] == false) {
+                    MixedCards[i] = CardsArray[j];
+                    IsCardInserted[j] = true;
+                }
+            }
+        }
+        //zjištění dealera
+        public static void identifyDealer(ref Card[] MixedCards, ref int dealerNumber, ref bool[] hasSmallBlind, ref bool[] hasBigBlind) {
+            Card[] dealerSelect = new Card[numberOfPlayers];
+            bool[] dealerNumberHeight = new bool[numberOfPlayers]; int maxCardValueDealer = 0;
+            byte[] colorHeight = new byte[numberOfPlayers];
+            byte maxColorValue = 0;
+            hasSmallBlind = new bool[numberOfActivePlayers]; hasBigBlind = new bool[numberOfActivePlayers];
+            for (int i = 0; i < numberOfPlayers; i++) {
+                dealerNumberHeight[i] = false;
+                hasSmallBlind[i] = false;
+                hasBigBlind[i] = false;
+            }
+            cardMixing(ref MixedCards);
+            for (int i = 0; i < numberOfPlayers; i++) {
+                dealerSelect[i] = MixedCards[i];
+            }
+            for (int i = 0; i < numberOfPlayers; i++) {
+                if (dealerSelect[i].cardValue > maxCardValueDealer) {
+                    maxCardValueDealer = dealerSelect[i].cardValue;
+                }
+            }
+            for (int i = 0; i < numberOfPlayers; i++) {
+                if (dealerSelect[i].cardValue == maxCardValueDealer) {
+                    dealerNumberHeight[i] = true;
+                }
+            }
+            for (int i = 0; i < numberOfPlayers; i++) {//v případě rovnosti hodnot rozhodují barvy
+                if (dealerNumberHeight[i] == true) {
+                    if (dealerSelect[i].cardColor == 'S') {
+                        colorHeight[i] = 4;
+                    } else if (dealerSelect[i].cardColor == 'H') {
+                        colorHeight[i] = 3;
+                    } else if (dealerSelect[i].cardColor == 'C') {
+                        colorHeight[i] = 2;
+                    } else if (dealerSelect[i].cardColor == 'D') {
+                        colorHeight[i] = 1;
+                    }
+                }
+            }
+            for (int i = 0; i < numberOfPlayers; i++) {
+                if (dealerNumberHeight[i] == true) {
+                    if (colorHeight[i] > maxColorValue) {
+                        dealerNumber = i;
+                        maxColorValue = colorHeight[i];
+                    }
+                }
+            }
+            if (dealerNumber < (numberOfActivePlayers - 2)) {//určení, kdo má big blind a small blind na začátku 1. hry
+                hasSmallBlind[(dealerNumber + 1)] = true;
+                hasBigBlind[(dealerNumber + 2)] = true;
+            } else if (dealerNumber == (numberOfActivePlayers - 2)) {
+                hasSmallBlind[(dealerNumber + 1)] = true;
+                hasBigBlind[0] = true;
+            } else if (dealerNumber == (numberOfActivePlayers - 1)) {
+                hasSmallBlind[0] = true;
+                hasBigBlind[1] = true;
+            }
+        }
+        //určení blindů v následujících hrách
+        public static void setBlinds(long[] playerChips, long[] playerBet, long smallBlindValue, long bigBlindValue, int dealerNumber) {
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                hasSmallBlind[i] = false;
+                hasBigBlind[i] = false;
+            }
+            if (numberOfActivePlayers != 2) {
+                if (dealerNumber < (numberOfActivePlayers - 2)) {
+                    hasSmallBlind[(dealerNumber + 1)] = true;
+                    hasBigBlind[(dealerNumber + 2)] = true;
+                } else if (dealerNumber == (numberOfActivePlayers - 2)) {
+                    hasSmallBlind[(dealerNumber + 1)] = true;
+                    hasBigBlind[0] = true;
+                } else if (dealerNumber == (numberOfActivePlayers - 1)) {
+                    hasSmallBlind[0] = true;
+                    hasBigBlind[1] = true;
+                }                
+            } else {
+                if (dealerNumber == 0) {
+                    hasSmallBlind[0] = true;
+                    hasBigBlind[1] = true;
+                } else {
+                    hasSmallBlind[1] = true;
+                    hasBigBlind[0] = true;
+                }
+            }
+            for (int i = 0; i < numberOfActivePlayers; i++) {//určení sázek na začátku hry
+                if (hasSmallBlind[i] == true) {
+                    if (playerChips[i] >= smallBlindValue) {
+                        playerBet[i] = smallBlindValue;
+                    } else {
+                        playerBet[i] = playerChips[i];
+                    }
+                } else if (hasBigBlind[i] == true) {
+                    if (playerChips[i] >= bigBlindValue) {
+                        playerBet[i] = bigBlindValue;
+                    } else {
+                        playerBet[i] = playerChips[i];
+                    }
+                } else {
+                    playerBet[i] = 0;
+                }
+            }
+        }
+        public static void moveDealer() {//posunutí dealera
+            int numberOfOutPlayersInFrontOfOrEqualDealer = 0;
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                if (isPlayerOut[i] == true && i <= dealerNumber) {
+                    numberOfOutPlayersInFrontOfOrEqualDealer++;//proměnná určující, o kolik se posune dealer při vypadnutí hráčů
+                }
+            }
+            if (isPlayerOut[dealerNumber] == false || numberOfActivePlayers > 2) {
+                if (dealerNumber < (numberOfActivePlayers - 1)) {
+                    if (numberOfOutPlayersInFrontOfOrEqualDealer == 0) {
+                        dealerNumber++;
+                    } else {
+                        dealerNumber += (numberOfOutPlayersInFrontOfOrEqualDealer - 1);
+                    }
+                } else {
+                    dealerNumber = 0;
+                }
+            } else {
+                if (dealerNumber == 0 || dealerNumber >= 2) {
+                    dealerNumber = 1;
+                } else {
+                    dealerNumber = 0;
+                }
+            }
+        }
+        public static void setPositionOfPlayers(ref int[] positionOfPlayersInTurn) {//nastavení pozice hráčů
+            positionOfPlayersInTurn = new int[numberOfActivePlayers];
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                if (i + positionOfUnderTheGun < numberOfActivePlayers) {
+                    positionOfPlayersInTurn[i] = i + positionOfUnderTheGun;
+                } else {
+                    positionOfPlayersInTurn[i] = i + positionOfUnderTheGun - numberOfActivePlayers;
+                }
+            }
+        }
+        public static void identifyPositionOfPlayers(ref int[] positionOfPlayersInTurn, ref bool[] hasBigBlind) {//určení pozice hráčů
+            if (numberOfActivePlayers > 2) {
+                positionOfUnderTheGun = 0;                
+                for (int i = 0; i < numberOfActivePlayers; i++) {
+                    if (hasBigBlind[i] == true) {
+                        if (i < (numberOfActivePlayers - 1)) {
+                            positionOfUnderTheGun = (i + 1);
+                        } else {
+                            positionOfUnderTheGun = 0;
+                        }
+                    }
+                }
+                setPositionOfPlayers(ref positionOfPlayersInTurn);
+            }
+        }
+        public static void identifyPositionOfPlayersWhere2PlayersPreFlop() {//určení pozice hráčů při 2 hráčích ve fázi preflop
+            if (numberOfActivePlayers == 2) {
+                if (dealerNumber == 0) {
+                    positionOfUnderTheGun = 0;
+                } else {
+                    positionOfUnderTheGun = 1;
+                }
+                setPositionOfPlayers(ref positionOfPlayersInTurn);
+            }
+        }
+        public static void identifyPositionOfPlayersWhere2PlayersAfterPreFlop() {//určení pozice hráčů při 2 hráčích po fázi preflop
+            if (numberOfActivePlayers == 2) {
+                if (dealerNumber == 0) {
+                    positionOfUnderTheGun = 1;
+                } else {
+                    positionOfUnderTheGun = 0;
+                }
+                setPositionOfPlayers(ref positionOfPlayersInTurn);
+            }
+        }
+        public static void subtractBlinds(ref long[] playerChips, ref long[] playerBet, ref long mainPot) {//odečtení žetonů hráčům z blindů a přičtení blindů do main potu
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                playerChips[i] -= playerBet[i];
+                mainPot += playerBet[i];
+            }
+        }
+        public static void handCards(int numberOfActivePlayers, Card[] MixedCards3, ref Card[,] players) {//rozdání karet hráčům
+            byte cardIndex = 0;
+            players = new Card[numberOfActivePlayers, playerCards];
+            for (byte i = 0; i < numberOfActivePlayers; i++) {
+                for (byte j = 0; j < playerCards; j++) {
+                    players[i, j] = MixedCards3[cardIndex];
+                    cardIndex++;
+                }
+            }
+        }
+        public static void preFlop(Card[] MixedCards3, int numberOfPlayers2) {//výpis karet ve fázi preflop
+            int cardIndexTable = numberOfPlayers2 * 2;
+            Console.Write("\n[Table]: ");
+            for (int i = 0; i < 5; i++) {
+                Console.Write("* ");
+            }
+        }
+        public static void flop(Card[] MixedCards3, int numberOfActivePlayers, ref bool hasAllExceptOneFolds) {//výpis karet ve fázi flop
+            if (hasAllExceptOneFolds == false) {
+                int cardIndexTable = numberOfActivePlayers * 2;
+                Console.Write("\n[Table]: ");
+                for (int i = cardIndexTable; i < cardIndexTable + 3; i++) {
+                    Console.Write(MixedCards3[i].cardDescription + " ");
+                }
+                for (byte i = 0; i < 2; i++) {
+                    Console.Write("* ");
+                }
+            }
+        }
+        public static void turn(Card[] MixedCards3, int numberOfActivePlayers, ref bool hasAllExceptOneFolds) {//výpis karet ve fázi turn
+            if (hasAllExceptOneFolds == false) {
+                int cardIndexTable = numberOfActivePlayers * 2;
+                Console.Write("\n[Table]: ");
+                for (int i = cardIndexTable; i < cardIndexTable + 4; i++) {
+                    Console.Write(MixedCards3[i].cardDescription + " ");
+                }
+                Console.Write("* ");
+            }
+        }
+        public static void river(out Card[] RiverCards, Card[] MixedCards3, int numberOfActivePlayers, ref bool hasAllExceptOneFolds) {//výpis karet ve fázi river
+            RiverCards = new Card[5];
+            if (hasAllExceptOneFolds == false) {
+                int cardIndexTable = numberOfActivePlayers * 2;                
+                int j = 0;
+                Console.Write("\n[Table]: ");
+                for (int i = cardIndexTable; i < cardIndexTable + 5; i++) {
+                    Console.Write(MixedCards3[i].cardDescription + " ");
+                    RiverCards[j] = MixedCards3[i];
+                    j++;
+                }
+                Console.WriteLine();
+            }
+        }
+        public static void setInitialCombinationStrength(int numberOfActivePlayers, ref byte[] combinationStrength) {//vynulování síly kombinací u všech hráčů
+            combinationStrength = new byte[numberOfActivePlayers];
+            for (byte i = 0; i < numberOfActivePlayers; i++) {
+                combinationStrength[i] = 0;
+            }
+        }
+        public static void identifyValues(ref byte[,] values, ref Card[] RiverCards, ref Card[,] players2, int numberOfActivePlayers) {//určení hodnot karet
+            values = new byte[numberOfActivePlayers, numberOfValues];
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                for (int j = 0; j < numberOfValues; j++) {
+                    values[i, j] = 0;
+                }
+            }
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                byte k = 0;
+                for (int j = 0; j < 7; j++) {
+                    if (j < 5) {
+                        for (byte m = 2; m <= 14; m++) {
+                            if (RiverCards[j].cardValue == m) {
+                                values[i, m - 2]++;
+                            }
+                        }
+                    } else {
+                        for (byte m = 2; m <= 14; m++) {
+                            if (players2[i, k].cardValue == m) {
+                                values[i, m - 2]++;
+                            }
+                        }
+                        k++;
+                    }
+                }
+            }
+        }
+        public static void identifyColors(ref byte[,] playerColors, ref char[,] colors, ref char[] colorsNames, ref Card[] RiverCards, ref Card[,] players2,
+            int numberOfActivePlayers) {//určení barev karet
+            colorsNames = new char[numberOfColors];
+            colorsNames[0] = 'H'; colorsNames[1] = 'D'; colorsNames[2] = 'S'; colorsNames[3] = 'C';
+            colors = new char[numberOfActivePlayers, tableAndOnePlayerCards];
+            playerColors = new byte[numberOfActivePlayers, numberOfColors];
+            for (byte i = 0; i < numberOfActivePlayers; i++) {
+                for (byte j = 0; j < numberOfColors; j++) {
+                    playerColors[i, j] = 0;
+                }
+            }
+            for (byte i = 0; i < numberOfActivePlayers; i++) {
+                byte k = 0;
+                for (byte j = 0; j < 7; j++) {
+                    if (j < 5) {
+                        if (RiverCards[j].cardColor == 'H') {
+                            colors[i, j] = 'H';
+                            playerColors[i, 0]++;
+                        } else if (RiverCards[j].cardColor == 'D') {
+                            colors[i, j] = 'D';
+                            playerColors[i, 1]++;
+                        } else if (RiverCards[j].cardColor == 'S') {
+                            colors[i, j] = 'S';
+                            playerColors[i, 2]++;
+                        } else if (RiverCards[j].cardColor == 'C') {
+                            colors[i, j] = 'C';
+                            playerColors[i, 3]++;
+                        }
+                    } else {
+                        if (players2[i, k].cardColor == 'H') {
+                            colors[i, j] = 'H';
+                            playerColors[i, 0]++;
+                        } else if (players2[i, k].cardColor == 'D') {
+                            colors[i, j] = 'D';
+                            playerColors[i, 1]++;
+                        } else if (players2[i, k].cardColor == 'S') {
+                            colors[i, j] = 'S';
+                            playerColors[i, 2]++;
+                        } else if (players2[i, k].cardColor == 'C') {
+                            colors[i, j] = 'C';
+                            playerColors[i, 3]++;
+                        }
+                        k++;
+                    }
+                }
+            }
+        }
+        public static void identifyHighCard(ref Card[] RiverCards, ref Card[,] players2, int numberOfActivePlayers, ref byte[] combinationStrength,
+            ref int[] combinationCardHeight) {//určení, zda je kombinace karet typu high card a její výška
+            combinationCardHeight = new int[numberOfActivePlayers];
+            for (byte i = 0; i < numberOfActivePlayers; i++) {
+                for (int j = 0; j < numberOfValues; j++) {
+                    if (values[i, j] == 1 && combinationStrength[i] <= 1) {
+                        combinationStrength[i] = 1;
+                        combinationCardHeight[i] = (j + 2);
+                    }
+                }
+            }
+        }
+        public static void identifyOnePairThreeOfAKindFourOfAKind(ref byte[,] values, ref Card[] RiverCards, ref Card[,] players2, int numberOfActivePlayers,
+            byte playerCards2, ref byte[] combinationStrength, ref int[] combinationOnePairCardHeight, ref int[] combinationThreeOfAKindCardHeight,
+            ref int[] combinationFourOfAKindCardHeight) {//určení, zda je kombinace karet typu one pair, three of a kind nebo four of a kind a její výška
+            combinationOnePairCardHeight = new int[numberOfActivePlayers];
+            combinationThreeOfAKindCardHeight = new int[numberOfActivePlayers];
+            combinationFourOfAKindCardHeight = new int[numberOfActivePlayers];
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                for (int j = 0; j < numberOfValues; j++) {
+                    if (values[i, j] == 2 && combinationStrength[i] <= 2) {
+                        combinationStrength[i] = 2;
+                        combinationOnePairCardHeight[i] = (j + 2);
+                    } else if (values[i, j] == 3 && combinationStrength[i] <= 4) {
+                        combinationStrength[i] = 4;
+                        combinationThreeOfAKindCardHeight[i] = (j + 2);
+                    } else if (values[i, j] == 4 && combinationStrength[i] <= 8) {
+                        combinationStrength[i] = 8;
+                        combinationFourOfAKindCardHeight[i] = (j + 2);
+                    }
+                }
+            }            
+        }
+        public static void identifyTwoPairs(ref byte[,] values, ref Card[] RiverCards, ref Card[,] players2, int numberOfActivePlayers,
+            byte playerCards2, ref byte[] combinationStrength, ref int[,] combinationCardHeight2) {//určení, zda je kombinace karet typu two pairs a její výška
+            byte pair = 3;
+            combinationCardHeight2 = new int[numberOfActivePlayers, pair];
+            int[,] combinationCardHeight2Unfiltered = new int[numberOfActivePlayers, pair];
+            byte[] pairCounter = new byte[numberOfActivePlayers];
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                pairCounter[i] = 0;
+            }
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                byte l = 0;
+                for (byte j = 2; j <= 14; j++) {
+                    if (values[i, j - 2] == 2) {
+                        combinationCardHeight2Unfiltered[i, l] = j;
+                        pairCounter[i]++;
+                        l++;
+                    }
+                }
+                if (pairCounter[i] == 2 && combinationStrength[i] <= 3) {
+                    combinationStrength[i] = 3;
+                    for (int j = 0; j < 2; j++) {
+                        combinationCardHeight2[i, j] = combinationCardHeight2Unfiltered[i, j];
+                    }
+                } else if (pairCounter[i] == 3 && combinationStrength[i] <= 3) {
+                    combinationStrength[i] = 3;
+                    int min = 15; byte minIndex = 0;
+                    for (byte j = 0; j < 2; j++) {
+                        combinationCardHeight2[i, j] = combinationCardHeight2Unfiltered[i, j];
+                        if (combinationCardHeight2[i, j] < min) {
+                            min = combinationCardHeight2[i, j];
+                            minIndex = j;
+                        }
+                    }
+                    if (combinationCardHeight2[i, 2] > min) {
+                        combinationCardHeight2[i, minIndex] = combinationCardHeight2Unfiltered[i, 2];
+                    }
+                }
+            }            
+        }
+        public static void identifyStraight(ref byte[,] values, ref Card[] RiverCards, ref Card[,] players2, int numberOfActivePlayers,
+            byte playerCards2, ref byte[] combinationStrength, ref int[] combinationCardHeight, ref bool[] isStraight) {//určení, zda je kombinace karet typu straight a její výška
+            combinationCardHeight = new int[numberOfActivePlayers];
+            isStraight = new bool[numberOfActivePlayers];
+            bool aceValueIs1;
+            byte straightCardNumber;
+            for (byte i = 0; i < numberOfActivePlayers; i++) {
+                isStraight[i] = false;
+            }
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                byte n = 1;
+                aceValueIs1 = true;
+                straightCardNumber = 0;
+                for (int l = 0; l < 13; l++) {
+                    if (aceValueIs1 == true) {
+                        if (values[i, 12] > 0) {
+                            straightCardNumber++;
+                        } else { }
+                    }
+                    if (values[i, n - 1] > 0) {
+                        straightCardNumber++;
+                        n++;
+                    } else {
+                        straightCardNumber = 0;
+                        n++;
+                    }
+                    aceValueIs1 = false;
+                    if (straightCardNumber >= 5 && combinationStrength[i] <= 5) {
+                        combinationStrength[i] = 5;
+                        combinationCardHeight[i] = n;
+                        isStraight[i] = true;
+                    }
+                }
+            }            
+        }
+        public static void identifyFlush(ref byte[,] playerColors, ref char[] colorsNames, ref byte[,] values, ref Card[] RiverCards, ref Card[,] players2,
+            int numberOfActivePlayers, byte playerCards2, ref byte[] combinationStrength, ref int[,] combinationCardHeight, ref byte[,] flushCardsValues,
+            ref bool[] isFlush, ref byte[] numberOfFlushCards, ref byte[] flushColor) {//určení, zda je kombinace karet typu flush a její výška
+            flushCardsValues = new byte[numberOfActivePlayers, tableAndOnePlayerCards];
+            combinationCardHeight = new int[numberOfActivePlayers, combinationCards];
+            isFlush = new bool[numberOfActivePlayers];
+            numberOfFlushCards = new byte[numberOfActivePlayers];
+            flushColor = new byte[numberOfActivePlayers];
+            for (byte i = 0; i < numberOfActivePlayers; i++) {
+                isFlush[i] = false;
+            }
+            for (byte i = 0; i < numberOfActivePlayers; i++) {
+                byte l = 0; byte m = 0;
+                for (byte j = 0; j < 4; j++) {
+                    if (playerColors[i, j] >= 5 && combinationStrength[i] <= 6) {
+                        combinationStrength[i] = 6;
+                        flushColor[i] = j;
+                        isFlush[i] = true;
+                        for (byte k = 0; k < 7; k++) {
+                            if (k < 5) {
+                                if (RiverCards[k].cardColor == colorsNames[j]) {
+                                    flushCardsValues[i, m] = RiverCards[k].cardValue;
+                                    m++;
+                                }
+                            } else {
+                                if (players2[i, l].cardColor == colorsNames[j]) {
+                                    flushCardsValues[i, m] = players2[i, l].cardValue;
+                                    m++;
+                                }
+                                l++;
+                            }
+                        }
+                    }
+                }
+                if (combinationStrength[i] == 6) {
+                    bool swapped = true;
+                    byte temporary;
+                    byte indexLastSwap = m;
+                    byte p = 0;
+                    numberOfFlushCards[i] = m;
+                    while (swapped == true) {
+                        swapped = false;
+                        for (byte o = 0; o < indexLastSwap - 1; o++) {
+                            if (flushCardsValues[i, o] < flushCardsValues[i, o + 1]) {
+                                temporary = flushCardsValues[i, o];
+                                flushCardsValues[i, o] = flushCardsValues[i, o + 1];
+                                flushCardsValues[i, o + 1] = temporary;
+                                swapped = true;
+                                p = o;
+                            }
+                        }
+                        indexLastSwap = ++p;
+                    }
+                    for (byte j = 0; j < 5; j++) {
+                        combinationCardHeight[i, j] = flushCardsValues[i, j];
+                    }                   
+                }
+            }
+        }
+        public static void identifyFullHouse(ref byte[,] values, ref Card[] RiverCards, ref Card[,] players2, int numberOfActivePlayers,
+            byte playerCards2, ref byte[] combinationStrength, ref int[,] combinationCardHeight) {//určení, zda je kombinace karet typu full house a její výška
+            combinationCardHeight = new int[numberOfActivePlayers, 2];
+            byte[] threeSameCardsCounter = new byte[numberOfActivePlayers];
+            byte[] twoSameCardsCounter = new byte[numberOfActivePlayers];
+            int[,] combinationCardHeightTwo = new int[numberOfActivePlayers, 3];
+            int[,] combinationCardHeightThree = new int[numberOfActivePlayers, 2];
+            for (byte i = 0; i < numberOfActivePlayers; i++) {
+                twoSameCardsCounter[i] = 0;
+                threeSameCardsCounter[i] = 0;
+            }
+            for (byte i = 0; i < numberOfActivePlayers; i++) {
+                byte k = 0; byte l = 0;
+                for (int j = 0; j < numberOfValues; j++) {
+                    if (values[i, j] == 2) {
+                        twoSameCardsCounter[i]++;
+                        combinationCardHeightTwo[i, k] = j + 2;
+                        k++;
+                    }
+                    if (values[i, j] == 3) {
+                        threeSameCardsCounter[i]++;
+                        combinationCardHeightThree[i, l] = j + 2;
+                        l++;
+                    }
+                }
+                if ((threeSameCardsCounter[i] == 1 && twoSameCardsCounter[i] >= 1 || threeSameCardsCounter[i] == 2) && combinationStrength[i] <= 7) {
+                    combinationStrength[i] = 7;
+                    if (threeSameCardsCounter[i] == 2) {
+                        if (combinationCardHeightThree[i, 0] > combinationCardHeightThree[i, 1]) {
+                            combinationCardHeight[i, 0] = combinationCardHeightThree[i, 0];
+                            combinationCardHeight[i, 1] = combinationCardHeightThree[i, 1];
+                        } else {
+                            combinationCardHeight[i, 0] = combinationCardHeightThree[i, 1];
+                            combinationCardHeight[i, 1] = combinationCardHeightThree[i, 0];
+                        }
+                    } else if (threeSameCardsCounter[i] == 1 && twoSameCardsCounter[i] == 1) {
+                        combinationCardHeight[i, 0] = combinationCardHeightThree[i, 0];
+                        combinationCardHeight[i, 1] = combinationCardHeightTwo[i, 0];
+                    } else if (threeSameCardsCounter[i] == 1 && twoSameCardsCounter[i] == 2) {
+                        combinationCardHeight[i, 0] = combinationCardHeightThree[i, 0];
+                        if (combinationCardHeightTwo[i, 0] > combinationCardHeightTwo[i, 1]) {
+                            combinationCardHeight[i, 1] = combinationCardHeightTwo[i, 0];
+                        } else {
+                            combinationCardHeight[i, 1] = combinationCardHeightTwo[i, 1];
+                        }
+                    }                   
+                }
+            }
+        }
+        public static void identifyStraightFlushAndRoyalFlush(ref Card[] RiverCards, ref Card[,] players2, int numberOfActivePlayers, byte playerCards2,
+            ref byte[] combinationStrength, ref int[] combinationCardHeight, ref byte[,] flushCardsValues, ref bool[] isFlush, ref bool[] isStraight,
+            ref byte[] numberOfFlushCards) {//určení, zda je kombinace karet typu straight flush nebo royal flush a její výška
+            combinationCardHeight = new int[numberOfActivePlayers];
+            byte straightFlushCards;
+            for (byte i = 0; i < numberOfActivePlayers; i++) {
+                straightFlushCards = 1;
+                if (isFlush[i] == true && isStraight[i] == true) {
+                    for (byte j = 0; j < numberOfFlushCards[i] - 1; j++) {
+                        if (flushCardsValues[i, j + 1] == (flushCardsValues[i, j] - 1)) {
+                            straightFlushCards++;
+                            if (straightFlushCards == 2 && j < 3) {
+                                combinationCardHeight[i] = flushCardsValues[i, j];
+                            }
+                        } else {
+                            straightFlushCards = 1;
+                        }
+                        if (straightFlushCards >= 5 && combinationStrength[i] <= 9) {
+                            combinationStrength[i] = 9;
+                        } else if (straightFlushCards >= 5 && combinationCardHeight[i] == 14 && combinationStrength[i] <= 10) {
+                            combinationStrength[i] = 10;
+                        }
+                    }                    
+                }
+            }
+        }
+        public static void identifyPlayerCardsNotInCombination(ref Card[] RiverCards, ref Card[,] players2, int numberOfPlayers2,
+            ref byte[] combinationStrength, ref int[] combinationHighCardHeight, ref int[] combinationOnePairCardHeight, ref int[,] combinationTwoPairsCardHeight,
+            ref int[] combinationThreeOfAKindCardHeight, ref int[] combinationFourOfAKindCardHeight, ref bool[,] isTableCardInCombination, 
+            ref bool[,] isPlayerCardInCombination) {//určení, které karty nejsou v karetní kombinaci
+            combinationCardHeight = new int[numberOfActivePlayers];
+            combinationCardHeight2 = new int[numberOfActivePlayers, 2];
+            isTableCardInCombination = new bool[numberOfPlayers2, 5];
+            isPlayerCardInCombination = new bool[numberOfPlayers2, 2];
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                if (combinationStrength[i] == 1) {
+                    combinationCardHeight[i] = combinationHighCardHeight[i];
+                } else if (combinationStrength[i] == 2) {
+                    combinationCardHeight[i] = combinationOnePairCardHeight[i];
+                } else if (combinationStrength[i] == 3) {
+                    for (int j = 0; j < 2; j++) {
+                        combinationCardHeight2[i, j] = combinationTwoPairsCardHeight[i, j];
+                    }
+                } else if (combinationStrength[i] == 4) {
+                    combinationCardHeight[i] = combinationThreeOfAKindCardHeight[i];
+                } else if (combinationStrength[i] == 8) {
+                    combinationCardHeight[i] = combinationFourOfAKindCardHeight[i];
+                }
+            }
+            for (byte i = 0; i < numberOfPlayers2; i++) {
+                for (byte j = 0; j < 5; j++) {
+                    isTableCardInCombination[i, j] = false;
+                }
+                for (byte j = 0; j < playerCards2; j++) {
+                    isPlayerCardInCombination[i, j] = false;
+                }
+            }
+            for (byte i = 0; i < numberOfPlayers2; i++) {
+                if (combinationStrength[i] == 1 || combinationStrength[i] == 2 || combinationStrength[i] == 4 || combinationStrength[i] == 8) {
+                    byte k = 0;
+                    for (byte j = 0; j < 7; j++) {
+                        if (j < 5) {
+                            if (RiverCards[j].cardValue == combinationCardHeight[i]) {
+                                isTableCardInCombination[i, j] = true;
+                            }
+                        } else {
+                            if (players2[i, k].cardValue == combinationCardHeight[i]) {
+                                isPlayerCardInCombination[i, k] = true;
+                            }
+                            k++;
+                        }
+                    }                    
+                } else if (combinationStrength[i] == 3) {
+                    byte l = 0;
+                    for (byte j = 0; j < 7; j++) {
+                        if (j < 5) {
+                            if (RiverCards[j].cardValue == combinationCardHeight2[i, 0] || RiverCards[i].cardValue == combinationCardHeight2[i, 1]) {
+                                isTableCardInCombination[i, j] = true;
+                            }
+                        } else {
+                            if (players2[i, l].cardValue == combinationCardHeight2[i, 0] || players2[i, l].cardValue == combinationCardHeight2[i, 1]) {
+                                isPlayerCardInCombination[i, l] = true;                                
+                            }
+                            l++;
+                        }
+                    }
+                }                
+            }
+        }
+        public static void writeCombination(ref byte[] combinationStrength, string[] combination, int numberOfActivePlayers, string[] playersNames,
+            ref long[] playerChips) {//výpis informací o hráči (jméno, počet žetonů, typ kombinace, zda složil karty)
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                combination[i] = "";
+            }
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                if (combinationStrength[i] == 1) {
+                    combination[i] = "High card";
+                } if (combinationStrength[i] == 2) {
+                    combination[i] = "One pair";
+                } if (combinationStrength[i] == 3) {
+                    combination[i] = "Two pairs";
+                } if (combinationStrength[i] == 4) {
+                    combination[i] = "Three of a kind";
+                } if (combinationStrength[i] == 5) {
+                    combination[i] = "Straight";
+                } if (combinationStrength[i] == 6) {
+                    combination[i] = "Flush";
+                } if (combinationStrength[i] == 7) {
+                    combination[i] = "Full house";
+                } if (combinationStrength[i] == 8) {
+                    combination[i] = "Four of a kind";
+                } if (combinationStrength[i] == 9) {
+                    combination[i] = "Straight flush";
+                } if (combinationStrength[i] == 10) {
+                    combination[i] = "Royal flush";
+                }
+            }
+            Console.WriteLine();
+            string foldWriteOrCombinationWrite = "";
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                if (hasFolded[i] == true) {
+                    foldWriteOrCombinationWrite = "folded";
+                } else {
+                    foldWriteOrCombinationWrite = combination[i];
+                }
+                Console.WriteLine(playersNames[i] + ": " + playerChips[i] + " chips, " + foldWriteOrCombinationWrite);
+            }
+            Console.WriteLine();
+        }
+        public static void setDefaultPlayerOut(ref bool[] isPlayerOut) {//výchozí nastavení označující vypadnuté hráče
+            isPlayerOut = new bool[numberOfActivePlayers];
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                isPlayerOut[i] = false;
+            }
+        }
+        public static void identifyPlayerOut(ref bool[] isPlayerOut, ref long[] playerChips) {//určení, zda hráč vypadnul
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                if (playerChips[i] == 0) {
+                    isPlayerOut[i] = true;
+                }
+            }
+        }
+        public static void decreaseNumberOfActivePlayers(ref long[] playerChips) {//snížení počtu hráčů a posunutí prvků v polích označujících atributy hráčů
+            int numberOfActivePlayersAfter = numberOfActivePlayers;
+            int i = 0;
+            while (i < numberOfActivePlayers) {
+                for (i = 0; i < numberOfActivePlayers; i++) {
+                    if (isPlayerOut[i] == true) {
+                        numberOfActivePlayersAfter--;                        
+                        for (int j = 0; j < numberOfActivePlayersAfter; j++) {
+                            if ((i + j) < numberOfActivePlayersAfter) {
+                                playersNames[i + j] = playersNames[i + j + 1];
+                                playerChips[i + j] = playerChips[i + j + 1];
+                                isPlayerOut[i + j] = isPlayerOut[i + j + 1];
+                            }
+                        }                        
+                    }
+                }
+                numberOfActivePlayers = numberOfActivePlayersAfter;
+            }
+        }
+        public static void setPlayerOutFalse() {//nastavení vypadnutí hráčů
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                isPlayerOut[i] = false;
+            }
+        }
+        public static void setDefaultFoldAndAllIn() {//výchozí nastavení atributů, zda hráč složil karty nebo šel all-in
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                hasFolded[i] = false;
+                isAllIn[i] = false;
+            }
+        }         
+        public static void uncalledBetReturn(ref bool[] hasFolded, ref long[] playerBet, ref long[] playerChips, ref long mainPot, ref bool isUncalledBet, 
+            ref int numberOfPlayerWithUncalledBet, ref long uncalledBet, ref bool isAnySidePot) {//vrácení nezavolané sázky
+            long secondHighestBet = 0;
+            uncalledBet = 0;
+            if (isUncalledBet == true) {                
+                for (int i = 0; i < numberOfActivePlayers; i++) {
+                    if (i != numberOfPlayerWithUncalledBet) {
+                        if (playerBet[i] > secondHighestBet) {
+                            secondHighestBet = playerBet[i];
+                        }
+                    }
+                }
+                uncalledBet = playerBet[numberOfPlayerWithUncalledBet] - secondHighestBet;
+                playerChips[numberOfPlayerWithUncalledBet] += uncalledBet;
+                if (isAnySidePot == false) {
+                    mainPot -= uncalledBet;
+                }
+            }
+        }
+        public static void writingOfReturningUncalledBet(ref long uncalledBet, ref bool isUncalledBet) {
+            if (isUncalledBet == true && uncalledBet != 0) {//výpis o vrácení nezavolané sázky
+                Console.WriteLine("uncalled bet of " + uncalledBet + " chips returned to " + playersNames[numberOfPlayerWithUncalledBet]);
+            }
+        }
+        public static void identifyWinnerOfTournament(ref bool isWinnerOfTournament) {
+            if (numberOfActivePlayers == 1) {//určení a výpis vítěze turnaje
+                Console.WriteLine("\nPlayer " + playersNames[0] + " is a winner of the tournament with " + playerChips[0] + " chips");
+                isWinnerOfTournament = true;
+            }
+        }
+        public static void identifySidePots(ref long[] playerBet, ref bool[] hasFolded, ref long[] sidePots, ref long mainPot, ref int numberOfSidePots,
+            ref int[] idNumberOfPlayerOrderedByBet, ref int[] numberToIdentifyContestants, ref bool isAnySidePot) {//určení side potů
+            int numberOfNotFoldedPlayers = 0;
+            numberOfSidePots = 0;
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                if (hasFolded[i] == false) {
+                    numberOfNotFoldedPlayers++;
+                }
+            }
+            if (numberOfNotFoldedPlayers > 1) {
+                long[] orderedPlayerBet = new long[numberOfActivePlayers];
+                idNumberOfPlayerOrderedByBet = new int[numberOfActivePlayers];
+                int j = 0;
+                for (int i = 0; i < numberOfActivePlayers; i++) {
+                    orderedPlayerBet[j] = playerBet[i];
+                    idNumberOfPlayerOrderedByBet[j] = i;
+                    j++;
+                }
+                bool swapped = true;
+                long temporary;
+                int temporary2;
+                int indexLastSwap = (numberOfActivePlayers - 1);
+                int p = 0;
+                while (swapped == true) {
+                    swapped = false;
+                    for (byte i = 0; i < indexLastSwap; i++) {
+                        if (orderedPlayerBet[i] > orderedPlayerBet[i + 1]) {
+                            temporary = orderedPlayerBet[i];
+                            orderedPlayerBet[i] = orderedPlayerBet[i + 1];
+                            orderedPlayerBet[i + 1] = temporary;
+                            temporary2 = idNumberOfPlayerOrderedByBet[i];
+                            idNumberOfPlayerOrderedByBet[i] = idNumberOfPlayerOrderedByBet[i + 1];
+                            idNumberOfPlayerOrderedByBet[i + 1] = temporary2;
+                            swapped = true;
+                            p = i;
+                        }
+                    }
+                    indexLastSwap = p;
+                }
+                numberToIdentifyContestants = new int[maxNumberOfPlayers - 1];
+                if (numberOfActivePlayers > 2) {
+                    sidePots = new long[maxNumberOfPlayers - 2];
+                    for (int i = 0; i < maxNumberOfPlayers - 2; i++) {
+                        sidePots[i] = 0;
+                        numberToIdentifyContestants[i] = 0;
+                    }
+                    int k = 0;
+                    isAnySidePot = false;
+                    for (int i = 0; i < numberOfActivePlayers - 2; i++) {
+                        if (playerBet[idNumberOfPlayerOrderedByBet[i]] < playerBet[idNumberOfPlayerOrderedByBet[i + 1]]) {
+                            sidePots[k] = (playerBet[idNumberOfPlayerOrderedByBet[i + 1]] - playerBet[idNumberOfPlayerOrderedByBet[i]]) * (numberOfActivePlayers - 1 - i);
+                            numberToIdentifyContestants[k + 1] = i + 1;
+                            k++;
+                            isAnySidePot = true;
+                        }
+                    }
+                    numberOfSidePots = k;
+                    if (isAnySidePot == true) {
+                        mainPot = orderedPlayerBet[0] * numberOfActivePlayers;
+                    }
+                }
+            }
+        }
+        public static void playerAction(ref long callBet, long raiseBet, ref string[] playersNames, ref bool[] hasFolded, ref bool[] isAllIn,
+            ref long[] playerBet, ref long[] playerChips, ref long mainPot, ref long smallBlindValue, ref long bigBlindValue, ref Card[,] players,
+            ref int playerStartsNextPhase, ref bool[] isPlayerOut, ref bool isUncalledBet, ref int numberOfPlayerWithUncalledBet, ref bool hasAllExceptOneFolds) {//reakce na hráčovy akce
+            long beforeBet;
+            bool isRaised = false;                                  
+            string playerAction = "";                     
+            int indexOfLastPlayerInPhase = numberOfActivePlayers; int willBeIndexOfLastPlayerInPhase = numberOfActivePlayers;
+            if (hasAllExceptOneFolds == false) {
+                Console.WriteLine();
+            }
+            do {
+                isRaised = false;
+                indexOfLastPlayerInPhase = willBeIndexOfLastPlayerInPhase;
+                for (int i = 0; i < indexOfLastPlayerInPhase; i++) {
+                    if (hasAllExceptOneFolds == false) {
+                        bool isBetCorrect; bool isValidCommand = false;
+                        beforeBet = 0;
+                        if (hasFolded[positionOfPlayersInTurn[i]] == false && isAllIn[positionOfPlayersInTurn[i]] == false) {
+                            for (int j = 0; j < numberOfActivePlayers; j++) {
+                                Console.WriteLine("Player " + playersNames[j] + ": " + playerChips[j] + " chips, bet: " + playerBet[j]);
+                            }
+                            Console.WriteLine("Pots: " + mainPot);
+                            while (isValidCommand == false) {
+                                if (playerChips[positionOfPlayersInTurn[i]] > 0 && playerBet[positionOfPlayersInTurn[i]] == callBet &&
+                                    playerChips[positionOfPlayersInTurn[i]] + playerBet[positionOfPlayersInTurn[i]] >= callBet + previousRaise) {
+                                    Console.WriteLine("Player " + playersNames[positionOfPlayersInTurn[i]] + " turn: cards: " +
+                                    players[positionOfPlayersInTurn[i], 0].cardDescription + " " + players[positionOfPlayersInTurn[i], 1].cardDescription
+                                    + ", " + playerChips[positionOfPlayersInTurn[i]] + " chips, bet: " + playerBet[positionOfPlayersInTurn[i]] +
+                                    ", (f)Fold (ch)Check (r)Raise/Bet (a)All-in(" + (playerBet[positionOfPlayersInTurn[i]] + 
+                                    playerChips[positionOfPlayersInTurn[i]]) + ")");
+                                } else if ((playerChips[positionOfPlayersInTurn[i]] - (callBet - playerBet[positionOfPlayersInTurn[i]])) > 0 &&
+                                    playerBet[positionOfPlayersInTurn[i]] < callBet && playerChips[positionOfPlayersInTurn[i]] +
+                                    playerBet[positionOfPlayersInTurn[i]] >= callBet + previousRaise) {
+                                    Console.WriteLine("Player " + playersNames[positionOfPlayersInTurn[i]] + " turn: cards: " +
+                                    players[positionOfPlayersInTurn[i], 0].cardDescription + " " + players[positionOfPlayersInTurn[i], 1].cardDescription
+                                    + ", " + playerChips[positionOfPlayersInTurn[i]] + " chips, bet: " + playerBet[positionOfPlayersInTurn[i]] +
+                                    ", (f)Fold (ca)Call(" + callBet + ") (r)Raise/Bet (a)All-in(" + (playerBet[positionOfPlayersInTurn[i]] +
+                                    playerChips[positionOfPlayersInTurn[i]]) + ")");
+                                } else if (playerChips[positionOfPlayersInTurn[i]] > 0 && playerBet[positionOfPlayersInTurn[i]] == callBet &&
+                                    playerChips[positionOfPlayersInTurn[i]] + playerBet[positionOfPlayersInTurn[i]] < callBet + previousRaise) {
+                                    Console.WriteLine("Player " + playersNames[positionOfPlayersInTurn[i]] + " turn: cards: " +
+                                        players[positionOfPlayersInTurn[i], 0].cardDescription + " " + players[positionOfPlayersInTurn[i], 1].cardDescription
+                                        + ", " + playerChips[positionOfPlayersInTurn[i]] + " chips, bet: " + playerBet[positionOfPlayersInTurn[i]] +
+                                        ", (f)Fold (ch)Check (a)All-in(" + (playerBet[positionOfPlayersInTurn[i]] +
+                                    playerChips[positionOfPlayersInTurn[i]]) + ")");
+                                } else if (((playerChips[positionOfPlayersInTurn[i]] - (callBet - playerBet[positionOfPlayersInTurn[i]])) == 0 &&
+                                    (playerBet[positionOfPlayersInTurn[i]] < callBet)) || (playerChips[positionOfPlayersInTurn[i]] +
+                                    playerBet[positionOfPlayersInTurn[i]] < callBet + previousRaise &&
+                                    playerChips[positionOfPlayersInTurn[i]] - (callBet - playerBet[positionOfPlayersInTurn[i]]) > 0)) {
+                                    Console.WriteLine("Player " + playersNames[positionOfPlayersInTurn[i]] + " turn: cards: " +
+                                    players[positionOfPlayersInTurn[i], 0].cardDescription + " " + players[positionOfPlayersInTurn[i], 1].cardDescription
+                                    + ", " + playerChips[positionOfPlayersInTurn[i]] + " chips, bet: " + playerBet[positionOfPlayersInTurn[i]] +
+                                    ", (f)Fold (ca)Call(" + callBet + ") (a)All-in(" + (playerBet[positionOfPlayersInTurn[i]] + playerChips[positionOfPlayersInTurn[i]]) + ")");
+                                } else if ((playerChips[positionOfPlayersInTurn[i]] - (callBet - playerBet[positionOfPlayersInTurn[i]])) <= 0 &&
+                                    playerBet[positionOfPlayersInTurn[i]] < callBet) {
+                                    Console.WriteLine("Player " + playersNames[positionOfPlayersInTurn[i]] + " turn: cards: " +
+                                    players[positionOfPlayersInTurn[i], 0].cardDescription + " " + players[positionOfPlayersInTurn[i], 1].cardDescription
+                                    + ", " + playerChips[positionOfPlayersInTurn[i]] + " chips, bet: " + playerBet[positionOfPlayersInTurn[i]] + 
+                                    ", (f)Fold (a)All-in(" + (playerBet[positionOfPlayersInTurn[i]] + playerChips[positionOfPlayersInTurn[i]]) + ")");
+                                }
+                                playerAction = Console.ReadLine();
+                                if (playerAction == "f") {//hráč provedl fold
+                                    hasFolded[positionOfPlayersInTurn[i]] = true;
+                                    isValidCommand = true;
+                                } else if (playerAction == "ch") {//hráč provedl check
+                                    if (playerBet[positionOfPlayersInTurn[i]] == callBet) {
+                                        isValidCommand = true;
+                                    } else {
+                                        Console.WriteLine("You can't check");
+                                    }
+                                } else if (playerAction == "ca") {//hráč provedl call
+                                    beforeBet = playerBet[positionOfPlayersInTurn[i]];
+                                    if (playerBet[positionOfPlayersInTurn[i]] >= callBet) {
+                                        Console.WriteLine("You can't call");
+                                    }
+                                    if ((playerChips[positionOfPlayersInTurn[i]] - (callBet - beforeBet)) < 0) {
+                                        Console.WriteLine("You don't have enough chips to call");
+                                    }
+                                    if (playerBet[positionOfPlayersInTurn[i]] < callBet && playerChips[positionOfPlayersInTurn[i]] -
+                                        (callBet - beforeBet) >= 0) {
+                                        playerBet[positionOfPlayersInTurn[i]] = callBet;
+                                        playerChips[positionOfPlayersInTurn[i]] -= (playerBet[positionOfPlayersInTurn[i]] - beforeBet);
+                                        mainPot += (playerBet[positionOfPlayersInTurn[i]] - beforeBet);
+                                        if (playerChips[positionOfPlayersInTurn[i]] == 0) {
+                                            isAllIn[positionOfPlayersInTurn[i]] = true;
+                                        }
+                                        isValidCommand = true;
+                                        isUncalledBet = false;
+                                    }
+                                } else if (playerAction == "r") {//hráč provedl raise/bet
+                                    if (playerChips[positionOfPlayersInTurn[i]] + playerBet[positionOfPlayersInTurn[i]] < callBet + previousRaise) {
+                                        Console.WriteLine("You can't raise");
+                                    } else {
+                                        do {
+                                            Console.Write("bet/raise to (min. " + (callBet + previousRaise) + ", max. " +
+                                            (playerBet[positionOfPlayersInTurn[i]] + playerChips[positionOfPlayersInTurn[i]]) + "): ");
+                                            raiseBet = long.Parse(Console.ReadLine());
+                                            if (raiseBet > callBet && playerChips[positionOfPlayersInTurn[i]] >= raiseBet - playerBet[positionOfPlayersInTurn[i]]
+                                                && ((raiseBet >= callBet + previousRaise) || (playerChips[positionOfPlayersInTurn[i]]
+                                                - (raiseBet - playerBet[positionOfPlayersInTurn[i]]) == 0))) {
+                                                beforeBet = playerBet[positionOfPlayersInTurn[i]];
+                                                previousRaise = raiseBet - callBet;
+                                                playerBet[positionOfPlayersInTurn[i]] = raiseBet;
+                                                callBet = raiseBet;
+                                                isBetCorrect = true;
+                                                isValidCommand = true;
+                                                isUncalledBet = true;
+                                                isRaised = true;
+                                                numberOfPlayerWithUncalledBet = positionOfPlayersInTurn[i];
+                                                playerChips[positionOfPlayersInTurn[i]] -= (raiseBet - beforeBet);
+                                                mainPot += (playerBet[positionOfPlayersInTurn[i]] - beforeBet);
+                                                if (playerChips[positionOfPlayersInTurn[i]] == 0) {
+                                                    isAllIn[positionOfPlayersInTurn[i]] = true;
+                                                }
+                                                indexOfLastPlayerInPhase = numberOfActivePlayers;
+                                                willBeIndexOfLastPlayerInPhase = i;
+                                            } else {
+                                                Console.WriteLine("Incorrect bet for raise");
+                                                isBetCorrect = false;
+                                            }
+                                        } while (isBetCorrect == false);
+                                    }
+                                } else if (playerAction == "a") {//hráč provedl all-in
+                                    beforeBet = playerBet[positionOfPlayersInTurn[i]];
+                                    playerBet[positionOfPlayersInTurn[i]] += playerChips[positionOfPlayersInTurn[i]];
+                                    playerChips[positionOfPlayersInTurn[i]] = 0;
+                                    mainPot += (playerBet[positionOfPlayersInTurn[i]] - beforeBet);
+                                    isAllIn[positionOfPlayersInTurn[i]] = true;
+                                    isValidCommand = true;
+                                    if (previousRaise < playerBet[positionOfPlayersInTurn[i]] - callBet) {
+                                        previousRaise = playerBet[positionOfPlayersInTurn[i]] - callBet;
+                                    }
+                                    if (playerBet[positionOfPlayersInTurn[i]] > callBet) {
+                                        callBet = playerBet[positionOfPlayersInTurn[i]];
+                                        isRaised = true;
+                                        isUncalledBet = true;
+                                        numberOfPlayerWithUncalledBet = positionOfPlayersInTurn[i];
+                                    }
+                                }
+                                if (isValidCommand == false) {
+                                    Console.WriteLine("Invalid command. Enter again.");
+                                }
+                            }
+                        }                       
+                        byte numberOfFolds = 0;
+                        for (int j = 0; j < numberOfActivePlayers; j++) {
+                            if (hasFolded[j] == true) {
+                                numberOfFolds++;
+                            }
+                        }
+                        if (numberOfFolds == (numberOfActivePlayers - 1)) {//pokud všichni hráči kromě jednoho složili karty, tento hráč vyhrál
+                            hasAllExceptOneFolds = true;
+                            for (int j = 0; j < numberOfActivePlayers; j++) {
+                                if (hasFolded[j] == false) {
+                                    playerChips[j] += mainPot;
+                                    Console.WriteLine("Winner: " + playersNames[j] + ": " + mainPot + " chips\n");
+                                }
+                            }
+                        }
+                    }
+                }
+            } while (isRaised == true && hasAllExceptOneFolds == false);
+        }
+        //metoda, která zjistí vítěze v jednotlivé hře Texas holdem pokeru
+        //jako parametry jsou použity: síla kombinace (typ kombinace), výšky každého typu kombinace karet (hodnoty karet), parametry jestli je karta na stole a v ruce 
+        //v kombinaci, definice karet na stole a karet v ruce, číslo vítěze, počet žetonů v main potu (žetony, které je možné vyhrát v dané hře), počet hráčových žetonů, 
+        //informace, zda hráč složil karty, počet side potů (side poty vznikají, když alespoň 3 hráči mají rozdílné sázky (2 z nich musí vsadit vše)), počet žetonů
+        //v side potech (žetony, které je možné vyhrát v dané hře), čísla určujících pořadí hráčů podle výšky sázek (důležité pro určení kdo vyhraje které side 
+        //poty), čísla, která určují, kdo může vyhrát které side poty, číslo hráče s nezavolanou sázkou (nezavolaná sázka se vrací hráči), sázky hráčů    
+        //síla typů kombinací: High card = 1, One pair = 2, Two pairs = 3, Three of a kind = 4, Straight = 5, 
+        //Flush = 6, Fullhouse = 7, Four of a kind = 8, Straight flush = 9, Royal flush = 10
+        public static void identifyWinner(ref byte[] combinationStrength, ref int[] combinationHighCardHeight, ref int[] combinationOnePairCardHeight, 
+            ref int[,] combinationTwoPairsCardHeight, ref int[] combinationThreeOfAKindCardHeight, ref int[] combinationStraightCardHeight, 
+            ref int[,] combinationFlushCardHeight, ref int[,] combinationFullHouseCardsHeight, ref int[] combinationFourOfAKindCardHeight, 
+            ref int[] combinationStraightFlushCardHeight, ref bool[,] isTableCardInCombination, ref bool[,] isPlayerCardInCombination, ref Card[] RiverCards, 
+            ref Card[,] players2, ref int[] winnerNumber, ref long mainPot, ref long[] playerChips, ref bool[] hasFolded, ref int numberOfSidePots, 
+            ref long[] sidePots, ref int[] idNumberOfPlayerOrderedByBet,  ref int[] numberToIdentifyContestants, ref int numberOfPlayerWithUncalledBet, 
+            ref long[] playerBet) {
+            // nejprve si pro všechny hráče uložím hodnoty karet určující výšku karet uvnitř karetní kombinace pro daný typ kombinace karet hráče (největší možná 
+            //hráčova kombinace)
+            //u některých kombinací je potřeba jedna karta pro určení výšky karet uvnitř karetní kombinace, u jiných více
+            combinationCardHeight = new int[numberOfActivePlayers];
+            combinationCardHeight2 = new int[numberOfActivePlayers, 5];
+            //cyklus pro procházení hráčů                       
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                //určení typu kombinace karet u jednotlivých hráčů
+                if (combinationStrength[i] == 1) {
+                    combinationCardHeight[i] = combinationHighCardHeight[i];
+                } else if (combinationStrength[i] == 2) {
+                    combinationCardHeight[i] = combinationOnePairCardHeight[i];
+                } else if (combinationStrength[i] == 3) {
+                    for (int j = 0; j < 2; j++) {
+                        combinationCardHeight2[i, j] = combinationTwoPairsCardHeight[i, j];
+                    }
+                } else if (combinationStrength[i] == 4) {
+                    combinationCardHeight[i] = combinationThreeOfAKindCardHeight[i];
+                } else if (combinationStrength[i] == 5) {
+                    combinationCardHeight[i] = combinationStraightCardHeight[i];
+                } else if (combinationStrength[i] == 6) {
+                    for (int j = 0; j < 5; j++) {
+                        combinationCardHeight2[i, j] = combinationFlushCardHeight[i, j];
+                    }
+                } else if (combinationStrength[i] == 7) {
+                    for (int j = 0; j < 2; j++) {
+                        combinationCardHeight2[i, j] = combinationFullHouseCardsHeight[i, j];
+                    }
+                } else if (combinationStrength[i] == 8) {
+                    combinationCardHeight[i] = combinationFourOfAKindCardHeight[i];
+                } else if (combinationStrength[i] == 9) {
+                    combinationCardHeight[i] = combinationStraightFlushCardHeight[i];
+                }
+            }
+            int numberOfGroupsOfPlayersWithSameBetAndCombination;
+            int playerShift;
+            bool playerShiftEnd;
+            bool[] isOneOfTheWinnersOrCantWin = new bool[numberOfActivePlayers]; //proměnná pro určení možného vítěze
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                isOneOfTheWinnersOrCantWin[i] = false;
+            }
+            int fromThisNumberOfSidePot = 0;
+            int toThisNumberOfSidePot = 0;
+            int moveByNumberOfSidePots = 0;
+            long winning;
+            long[] winnings;                        
+            int numberOfPlayersToDivideWinning;
+            //cyklus, který zjišťuje výherce main potu a side potů      
+            for (int s = 0; s <= numberOfSidePots; s += moveByNumberOfSidePots) {               
+                long sidePotsTogether = 0;
+                byte recentHighestCombination = 0;
+                int recentHighestCardHeight = 0;
+                byte numberOfSameCardOutOfCombination = 0;
+                int numberFromPlayerWinningDivide = 0;
+                int[] combinationStrengthWinner = new int[numberOfActivePlayers];
+                byte numberOfSameHighestCombinationFirstHeight = 0;
+                bool isWinner = false;
+                int idNumberOfPlayerOrderedByBetWithHighestBetWhenTie = -1;
+                int idNumberOfPlayerOrderedByBetWinner = -1;
+                winnerNumber = new int[numberOfActivePlayers];
+                byte j = 0;
+                for (byte i = 0; i < numberOfActivePlayers; i++) {
+                    winnerNumber[i] = -1;
+                }
+                for (byte i = 0; i < numberOfActivePlayers; i++) {
+                    //jako výherce má smysl vyhodnocovat jen toho, který nesložil karty, nevyhrál žádné poty nebo nemůže vyhrát dané side poty, protože má
+                    //nízkou sázku
+                    //nejprve se porovnají typy kombinací
+                    if (hasFolded[idNumberOfPlayerOrderedByBet[i]] == false && isOneOfTheWinnersOrCantWin[idNumberOfPlayerOrderedByBet[i]] == false) {
+                        if (combinationStrength[idNumberOfPlayerOrderedByBet[i]] > recentHighestCombination) {
+                            combinationStrengthWinner[0] = idNumberOfPlayerOrderedByBet[i];
+                            recentHighestCombination = combinationStrength[idNumberOfPlayerOrderedByBet[i]];
+                            j = 1;
+                            for (byte k = 1; k < numberOfActivePlayers; k++) {
+                                combinationStrengthWinner[k] = -1;
+                            }
+                        } else if (combinationStrength[idNumberOfPlayerOrderedByBet[i]] == recentHighestCombination) {
+                            combinationStrengthWinner[j] = idNumberOfPlayerOrderedByBet[i];
+                            j++;
+                        }
+                    }
+                }
+                byte numberOfSameHighestCombinationStrengths = 0;
+                //spočítá, kolik hráčů má stejné nejvyšší typy karetních kombinací
+                for (byte i = 0; i < numberOfActivePlayers; i++) {
+                    if (combinationStrengthWinner[i] != -1) {
+                        numberOfSameHighestCombinationStrengths++;
+                    }
+                }
+                //pokud má nejvyšší typ kombinace jen jeden hráč, tento hráč vyhrál
+                if (numberOfSameHighestCombinationStrengths == 1) {
+                    winnerNumber[0] = combinationStrengthWinner[0];
+                    for (int i = 0; i < numberOfActivePlayers; i++) {
+                        if (idNumberOfPlayerOrderedByBet[i] == winnerNumber[0]) {
+                            idNumberOfPlayerOrderedByBetWinner = i;
+                        }
+                    }
+                    for (int i = 0; i < numberOfActivePlayers; i++) {
+                        //určení, zda hráč již vyhrál nebo nemůže vyhrát dané side poty, protože má nízkou výši sázky
+                        if (i <= idNumberOfPlayerOrderedByBetWinner) {
+                            isOneOfTheWinnersOrCantWin[idNumberOfPlayerOrderedByBet[i]] = true;
+                        }
+                        if (playerBet[winnerNumber[0]] == playerBet[i]) {
+                            isOneOfTheWinnersOrCantWin[i] = true;
+                        }
+                    }                    
+                    for (int i = 0; i <= numberOfSidePots; i++) {
+                        if (idNumberOfPlayerOrderedByBetWinner >= numberToIdentifyContestants[i]) {
+                            //vyřazení side potů, které už byly vyhrány
+                            moveByNumberOfSidePots = i + 1;
+                            toThisNumberOfSidePot = i;                            
+                        }
+                    }                                        
+                    for (int i = fromThisNumberOfSidePot; i < toThisNumberOfSidePot; i++) {                        
+                        sidePotsTogether += sidePots[i];
+                    }
+                    fromThisNumberOfSidePot += (moveByNumberOfSidePots - 1);
+                    playerChips[winnerNumber[0]] += sidePotsTogether;
+                    //pokud nevznikl žádný side pot (všichni vsadili stejně), hráč vyhraje main pot (main pot je vždy jen jeden)
+                    if (s == 0) {
+                        playerChips[winnerNumber[0]] += mainPot;
+                        winning = mainPot + sidePotsTogether;
+                    } else {
+                        winning = sidePotsTogether;
+                    }
+                    Console.WriteLine("Winner: " + playersNames[winnerNumber[0]] + ": " + winning + " chips");
+                    //pokud je více hráčů s nejvyšším typem kombinace, posuzuje se výška karet uvnitř kombinace
+                } else {
+                    int[] combinationCardHeightWinner = new int[numberOfSameHighestCombinationStrengths];
+                    //určení kombinace u které je potřeba 1 karta pro stanovení její výšky
+                    if (combinationStrength[combinationStrengthWinner[0]] == 1 || combinationStrength[combinationStrengthWinner[0]] == 2 ||
+                        combinationStrength[combinationStrengthWinner[0]] == 4 || combinationStrength[combinationStrengthWinner[0]] == 5
+                        || combinationStrength[combinationStrengthWinner[0]] == 8 || combinationStrength[combinationStrengthWinner[0]] == 9) {
+                        recentHighestCardHeight = 0; //pomocná proměnná pro porovnání výšky karet
+                        for (byte i = 0; i < numberOfSameHighestCombinationStrengths; i++) {
+                            if (combinationCardHeight[combinationStrengthWinner[i]] > recentHighestCardHeight) {
+                                combinationCardHeightWinner[0] = combinationStrengthWinner[i];
+                                recentHighestCardHeight = combinationCardHeight[combinationStrengthWinner[i]];
+                                j = 1;
+                                for (byte k = 1; k < numberOfSameHighestCombinationStrengths; k++) {
+                                    combinationCardHeightWinner[k] = -1;
+                                }
+                            } else if (combinationCardHeight[combinationStrengthWinner[i]] == recentHighestCardHeight) {
+                                combinationCardHeightWinner[j] = combinationStrengthWinner[i];
+                                j++;
+                            }
+                        }
+                        numberOfSameHighestCombinationFirstHeight = 0;
+                        for (byte m = 0; m < numberOfSameHighestCombinationStrengths; m++) {
+                            if (combinationCardHeightWinner[m] != -1) {
+                                numberOfSameHighestCombinationFirstHeight++;
+                            }
+                        }
+                        //pokud má jen jeden hráč nejvyšší výšku karet uvnitř karetní kombinace, je vítězem
+                        if (numberOfSameHighestCombinationFirstHeight == 1) {
+                            winnerNumber[0] = combinationCardHeightWinner[0];
+                            for (int i = 0; i < numberOfActivePlayers; i++) {
+                                if (idNumberOfPlayerOrderedByBet[i] == winnerNumber[0]) {
+                                    idNumberOfPlayerOrderedByBetWinner = i;
+                                }
+                            }
+                            for (int i = 0; i < numberOfActivePlayers; i++) {
+                                if (i <= idNumberOfPlayerOrderedByBetWinner) {
+                                    isOneOfTheWinnersOrCantWin[idNumberOfPlayerOrderedByBet[i]] = true;
+                                }
+                                if (playerBet[winnerNumber[0]] == playerBet[i]) {
+                                    isOneOfTheWinnersOrCantWin[i] = true;
+                                }
+                            }
+                            for (int i = 0; i <= numberOfSidePots; i++) {
+                                if (idNumberOfPlayerOrderedByBetWinner >= numberToIdentifyContestants[i]) {
+                                    //vyřazení side potů, které už byly vyhrány
+                                    moveByNumberOfSidePots = i + 1;
+                                    toThisNumberOfSidePot = i;                                    
+                                }
+                            }                                                        
+                            for (int i = fromThisNumberOfSidePot; i < toThisNumberOfSidePot; i++) {                                
+                                sidePotsTogether += sidePots[i];
+                            }
+                            fromThisNumberOfSidePot += (moveByNumberOfSidePots - 1);
+                            playerChips[winnerNumber[0]] += sidePotsTogether;
+                            //pokud nevznikl žádný side pot, hráč vyhraje main pot (main pot je vždy jen jeden)
+                            if (s == 0) {
+                                playerChips[winnerNumber[0]] += mainPot;
+                                winning = mainPot + sidePotsTogether;
+                            } else {
+                                winning = sidePotsTogether;
+                            }
+                            Console.WriteLine("Winner: " + playersNames[winnerNumber[0]] + ": " + winning + " chips");                            
+                        }
+                        //u těchto kombinací je potřeba více než jedna karta pro určení výšky karet uvnitř kombinace (2 u two pairs a fullhouse, 5 u flush)
+                    } else if (combinationStrength[combinationStrengthWinner[0]] == 3 || combinationStrength[combinationStrengthWinner[0]] == 6 ||
+                        combinationStrength[combinationStrengthWinner[0]] == 7) {
+                        int q;
+                        if (combinationStrength[combinationStrengthWinner[0]] == 6) {
+                            q = 5;
+                        } else {
+                            q = 2;
+                        }
+                        short r;
+                        isWinner = false;                        
+                        for (short k = 0; k < q; k++) {
+                            if (isWinner == false) {
+                                recentHighestCardHeight = 0;
+                                //určení výšky karet uvnitř karetní kombinace
+                                for (r = 0; r < numberOfSameHighestCombinationStrengths; r++) {
+                                    if (combinationCardHeight2[combinationStrengthWinner[r], k] > recentHighestCardHeight) {
+                                        combinationCardHeightWinner[0] = combinationStrengthWinner[r];
+                                        recentHighestCardHeight = combinationCardHeight2[combinationStrengthWinner[r], k];
+                                        j = 1;
+                                        for (byte l = 1; l < numberOfSameHighestCombinationStrengths; l++) {
+                                            combinationCardHeightWinner[l] = -1;
+                                        }
+                                    } else if (combinationCardHeight2[combinationStrengthWinner[r], k] == recentHighestCardHeight) {
+                                        combinationCardHeightWinner[j] = combinationStrengthWinner[r];
+                                        j++;
+                                    }
+                                }
+                                numberOfSameHighestCombinationFirstHeight = 0;
+                                for (byte m = 0; m < numberOfSameHighestCombinationStrengths; m++) {
+                                    if (combinationCardHeightWinner[m] != -1) {
+                                        numberOfSameHighestCombinationFirstHeight++;
+                                    }
+                                }
+                                //pokud má jen jeden hráč nejvyšší výšku karet uvnitř karetní kombinace, je vítězem
+                                if (numberOfSameHighestCombinationFirstHeight == 1) {
+                                    winnerNumber[0] = combinationCardHeightWinner[0];                                    
+                                    isWinner = true;
+                                    for (int i = 0; i < numberOfActivePlayers; i++) {
+                                        if (idNumberOfPlayerOrderedByBet[i] == winnerNumber[0]) {
+                                            idNumberOfPlayerOrderedByBetWinner = i;
+                                        }
+                                    }
+                                    for (int i = 0; i < numberOfActivePlayers; i++) {
+                                        if (i <= idNumberOfPlayerOrderedByBetWinner) {
+                                            isOneOfTheWinnersOrCantWin[idNumberOfPlayerOrderedByBet[i]] = true;
+                                        }
+                                        if (playerBet[winnerNumber[0]] == playerBet[i]) {
+                                            isOneOfTheWinnersOrCantWin[i] = true;
+                                        }
+                                    }
+                                    for (int i = 0; i <= numberOfSidePots; i++) {
+                                        if (idNumberOfPlayerOrderedByBetWinner >= numberToIdentifyContestants[i]) {
+                                            //vyřazení side potů, které už byly vyhrány
+                                            moveByNumberOfSidePots = i + 1;
+                                            toThisNumberOfSidePot = i;                                           
+                                        }
+                                    }                                                                        
+                                    for (int i = fromThisNumberOfSidePot; i < toThisNumberOfSidePot; i++) {                                        
+                                        sidePotsTogether += sidePots[i];
+                                    }
+                                    fromThisNumberOfSidePot += (moveByNumberOfSidePots - 1);
+                                    playerChips[winnerNumber[0]] += sidePotsTogether;
+                                    //pokud nevznikl žádný side pot, hráč vyhraje main pot (main pot je vždy jen jeden)
+                                    if (s == 0) {
+                                        playerChips[winnerNumber[0]] += mainPot;
+                                        winning = mainPot + sidePotsTogether;
+                                    } else {
+                                        winning = sidePotsTogether;
+                                    }
+                                    Console.WriteLine("Winner: " + playersNames[winnerNumber[0]] + ": " + winning + " chips");
+                                    //pokud nebyl určen vítěz, nastala rovnost a hráči, mezi kterými je rovnost postupují do další fáze vyhodnocování
+                                    //isWinner = true v této fázi znamená, že v této fázi je více vítězů, mezi kterými se bude dále vyhodnocovat                                
+                                } else {
+                                    if (combinationStrength[combinationStrengthWinner[0]] != 6 && k >= 1) {
+                                        isWinner = true;
+                                    }
+                                    if (combinationStrength[combinationStrengthWinner[0]] == 6 && k >= 4) {
+                                        isWinner = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    //pokud i výšky karet uvnitř kombinace jsou shodné, následuje porovnání všech pěti karet tvořící hodnocenou kombinaci (např. one pair tvoří
+                    //jen 2 karty, ale 3 další nejvyšší karty na stole nebo v hráčově ruce se při rovnosti vyhodnocují)        
+                    if (numberOfSameHighestCombinationFirstHeight > 1) {
+                        byte cardInCombinationCounter = 0;
+                        for (byte i = 0; i < 2; i++) {
+                            if (isPlayerCardInCombination[combinationCardHeightWinner[0], i] == true) {
+                                cardInCombinationCounter++;
+                            }
+                        }
+                        //pokud obě karty v hráčově ruce tvoří kombinaci, není potřeba vyhodnocovat další karty, došlo k remíze
+                        if (cardInCombinationCounter == 2) {
+                            numberOfGroupsOfPlayersWithSameBetAndCombination = 1;
+                            numberFromPlayerWinningDivide = 0;                            
+                            winnings = new long[numberOfSameHighestCombinationFirstHeight];
+                            numberOfPlayersToDivideWinning = numberOfSameHighestCombinationFirstHeight;
+                            for (byte i = 0; i < numberOfSameHighestCombinationFirstHeight; i++) {
+                                winnerNumber[i] = combinationCardHeightWinner[i];
+                            }
+                                for (int k = 0; k < numberOfActivePlayers; k++) {
+                                    for (int l = 0; l < numberOfSameHighestCombinationFirstHeight; l++) {
+                                        if (idNumberOfPlayerOrderedByBet[k] == winnerNumber[l]) {
+                                            if (k > idNumberOfPlayerOrderedByBetWithHighestBetWhenTie) {
+                                                idNumberOfPlayerOrderedByBetWithHighestBetWhenTie = k;
+                                            }
+                                        }
+                                    }                                    
+                                }
+                                for (int k = 0; k < numberOfActivePlayers; k++) {
+                                //hráč nemůže vyhrát dané side poty, protože má nízkou výši sázky
+                                if (k <= idNumberOfPlayerOrderedByBetWithHighestBetWhenTie) {
+                                        isOneOfTheWinnersOrCantWin[idNumberOfPlayerOrderedByBet[k]] = true;
+                                    }
+                                //hráč je jedním z vítězů daných side potů, protože má výherní kombinaci a vsadil stejně jako jiný vítěz
+                                if (playerBet[idNumberOfPlayerOrderedByBetWithHighestBetWhenTie] == playerBet[k]) {
+                                        isOneOfTheWinnersOrCantWin[k] = true;
+                                    }
+                                }
+                            //určení, kolik je skupin hráčů se stejnou sázkou a karetní kombinací
+                            for (int t = 0; t < numberOfSameHighestCombinationFirstHeight - 1; t++) {
+                                if (playerBet[idNumberOfPlayerOrderedByBet[t]] < playerBet[idNumberOfPlayerOrderedByBet[t + 1]]) {
+                                    numberOfGroupsOfPlayersWithSameBetAndCombination++;
+                                }
+                            }
+                            //určení, o kolik hráčů se bude posouvat                   
+                            for (int t = 0; t < numberOfGroupsOfPlayersWithSameBetAndCombination; t++) {
+                                sidePotsTogether = 0;
+                                playerShift = 1;
+                                playerShiftEnd = false;
+                                for (int u = numberFromPlayerWinningDivide; u < numberOfSameHighestCombinationFirstHeight - 1; u++) {
+                                    if (playerShiftEnd == false) {
+                                        if (playerBet[idNumberOfPlayerOrderedByBet[u]] == playerBet[idNumberOfPlayerOrderedByBet[u + 1]]) {
+                                            playerShift++;
+                                        } else {
+                                            playerShiftEnd = true;
+                                        }
+                                    }
+                                }                                
+                                for (int k = 0; k <= numberOfSidePots; k++) {
+                                    if (idNumberOfPlayerOrderedByBetWithHighestBetWhenTie >= numberToIdentifyContestants[k]) {
+                                        //vyřazení side potů, které už byly vyhrány
+                                        moveByNumberOfSidePots = k + 1;                                       
+                                    }
+                                }
+                                for (int k = fromThisNumberOfSidePot; k < toThisNumberOfSidePot; k++) {
+                                    sidePotsTogether += sidePots[k];
+                                }                                                               
+                                if (s == 0 && numberFromPlayerWinningDivide == 0) {
+                                    //došlo k rovnosti, je více konečných vítězů, výhra (main pot a případné side poty) se rozděluje mezi vítěze
+                                    for (int k = numberFromPlayerWinningDivide; k < numberOfSameHighestCombinationFirstHeight; k++) {
+                                        winnings[k] += (mainPot + sidePotsTogether) / numberOfPlayersToDivideWinning;
+                                    }
+                                } else {
+                                    for (int k = numberFromPlayerWinningDivide; k < numberOfSameHighestCombinationFirstHeight; k++) {
+                                        winnings[k] += sidePotsTogether / numberOfPlayersToDivideWinning;
+                                    }
+                                }
+                                fromThisNumberOfSidePot += (moveByNumberOfSidePots - 2);
+                                toThisNumberOfSidePot += (moveByNumberOfSidePots - 1);
+                                //postupně se čím dál méně hráčů dělí o side poty                           
+                                numberOfPlayersToDivideWinning -= playerShift;
+                                numberFromPlayerWinningDivide += playerShift;
+                            }                           
+                            for (int i = 0; i < numberOfSameHighestCombinationFirstHeight; i++) {
+                                playerChips[winnerNumber[i]] += winnings[i];
+                                Console.WriteLine("Winner: " + playersNames[winnerNumber[i]] + ": " + winnings[i] + " chips");
+                            }                            
+                        } else {
+                            //tyto typy karetních kombinací se skládají z méně než pěti karet, proto při rovnosti výšek karet uvnitř karetní kombinace je potřeba
+                            //vyhodnotit zbývající (doplňkové) nejvyšší karty do pěti karet
+                            byte m = 0;
+                            if (combinationStrength[combinationStrengthWinner[0]] == 1 || combinationStrength[combinationStrengthWinner[0]] == 2 ||
+                                combinationStrength[combinationStrengthWinner[0]] == 3 || combinationStrength[combinationStrengthWinner[0]] == 4
+                                || combinationStrength[combinationStrengthWinner[0]] == 8) {
+                                int[,] tableAndPlayerCardsValuesNotInCombination = new int[numberOfActivePlayers, 7];
+                                for (int i = 0; i < numberOfSameHighestCombinationFirstHeight; i++) {
+                                    for (int n = 0; n < 7; n++) {
+                                        tableAndPlayerCardsValuesNotInCombination[combinationCardHeightWinner[i], n] = -1;
+                                    }
+                                    int l = 0;
+                                    m = 0;
+                                    for (int k = 0; k < 7; k++) {
+                                        if (k < 5) {
+                                            //vyhodnocení, zda na stole jsou karty v kombinaci
+                                            if (isTableCardInCombination[combinationCardHeightWinner[i], k] == false) {
+                                                tableAndPlayerCardsValuesNotInCombination[combinationCardHeightWinner[i], m] = RiverCards[k].cardValue;
+                                                m++;
+                                            }
+                                        } else {
+                                            //vyhodnocení, zda v hráčově ruce jsou karty v kombinaci
+                                            if (isPlayerCardInCombination[combinationCardHeightWinner[i], l] == false) {
+                                                tableAndPlayerCardsValuesNotInCombination[combinationCardHeightWinner[i], m] = players2[combinationCardHeightWinner[i], l].cardValue;
+                                                m++;
+                                            }
+                                            l++;
+                                        }
+                                    }
+                                }
+                                for (int i = 0; i < numberOfSameHighestCombinationFirstHeight; i++) {
+                                    bool swapped = true;
+                                    int temporary;
+                                    byte indexLastSwap = m;
+                                    byte p = 0;
+                                    //třídění bubble sort pro seřazení doplňkových karet od nejvyšší po nejnižší
+                                    while (swapped == true) {
+                                        swapped = false;
+                                        for (byte o = 0; o < indexLastSwap - 1; o++) {
+                                            if (tableAndPlayerCardsValuesNotInCombination[combinationCardHeightWinner[i], o] < tableAndPlayerCardsValuesNotInCombination[combinationCardHeightWinner[i], o + 1]) {
+                                                temporary = tableAndPlayerCardsValuesNotInCombination[combinationCardHeightWinner[i], o];
+                                                tableAndPlayerCardsValuesNotInCombination[combinationCardHeightWinner[i], o] = tableAndPlayerCardsValuesNotInCombination[combinationCardHeightWinner[i], o + 1];
+                                                tableAndPlayerCardsValuesNotInCombination[combinationCardHeightWinner[i], o + 1] = temporary;
+                                                swapped = true;
+                                                p = o;
+                                            }
+                                        }
+                                        indexLastSwap = ++p;
+                                    }
+                                }
+                                int[] cardOutOfCombinationWinner = new int[numberOfSameHighestCombinationFirstHeight];
+                                byte numberOfCardsToFive = 0;
+                                //určení, kolik karet je doplňkových
+                                if (combinationStrength[combinationStrengthWinner[0]] == 1) {
+                                    numberOfCardsToFive = 4;
+                                } else if (combinationStrength[combinationStrengthWinner[0]] == 2) {
+                                    numberOfCardsToFive = 3;
+                                } else if (combinationStrength[combinationStrengthWinner[0]] == 4) {
+                                    numberOfCardsToFive = 2;
+                                } else if (combinationStrength[combinationStrengthWinner[0]] == 3 || combinationStrength[combinationStrengthWinner[0]] == 8) {
+                                    numberOfCardsToFive = 1;
+                                }
+                                bool winnerDecided = false;
+                                //určení, kdo je vítěz
+                                for (byte i = 0; i < numberOfCardsToFive; i++) {
+                                    if (winnerDecided == false) {
+                                        for (int n = 0; n < numberOfSameHighestCombinationFirstHeight; n++) {
+                                            cardOutOfCombinationWinner[n] = -1;
+                                        }
+                                        numberOfSameCardOutOfCombination = 1;
+                                        int recentHighestCardOutOfCombination = 0;
+                                        byte l = 0;                                        
+                                        for (byte k = 0; k < numberOfSameHighestCombinationFirstHeight; k++) {
+                                            //určení, zda má hráč úplně stejnou kombinaci jako jiný hráč
+                                            if (tableAndPlayerCardsValuesNotInCombination[combinationCardHeightWinner[k], i] == recentHighestCardOutOfCombination) {
+                                                numberOfSameCardOutOfCombination++;
+                                                l++;
+                                                cardOutOfCombinationWinner[l] = combinationCardHeightWinner[k];
+                                            }
+                                            //určení, zda má hráč vyšší kombinaci než hráč s dosavadní nejvyšší kombinací
+                                            if (tableAndPlayerCardsValuesNotInCombination[combinationCardHeightWinner[k], i] > recentHighestCardOutOfCombination) {
+                                                l = 0;
+                                                numberOfSameCardOutOfCombination = 1;
+                                                recentHighestCardOutOfCombination = tableAndPlayerCardsValuesNotInCombination[combinationCardHeightWinner[k], i];
+                                                cardOutOfCombinationWinner[l] = combinationCardHeightWinner[k];
+                                            }
+                                        }
+                                        //případ, kdy je jeden vítěz, který vyhrává dané side poty (nebo i main pot, tento hráč se nedělí s ostatními o dané
+                                        //side poty, ale jiní hráči stále mohou vyhrát následující side poty)
+                                        if (numberOfSameCardOutOfCombination == 1) {
+                                            winnerNumber[0] = cardOutOfCombinationWinner[0];
+                                            winnerDecided = true;
+                                            for (int k = 0; k < numberOfActivePlayers; k++) {
+                                                if (idNumberOfPlayerOrderedByBet[k] == winnerNumber[0]) {
+                                                    idNumberOfPlayerOrderedByBetWinner = k;
+                                                }
+                                            }
+                                            for (int k = 0; k < numberOfActivePlayers; k++) {
+                                                if (i <= idNumberOfPlayerOrderedByBetWinner) {
+                                                    isOneOfTheWinnersOrCantWin[idNumberOfPlayerOrderedByBet[k]] = true;
+                                                }
+                                                if (playerBet[winnerNumber[0]] == playerBet[k]) {
+                                                    isOneOfTheWinnersOrCantWin[k] = true;
+                                                }
+                                            }
+                                            for (int k = 0; k <= numberOfSidePots; k++) {
+                                                if (idNumberOfPlayerOrderedByBetWinner >= numberToIdentifyContestants[k]) {
+                                                    //vyřazení side potů, které už byly vyhrány
+                                                    moveByNumberOfSidePots = k + 1;
+                                                    toThisNumberOfSidePot = k;                                                    
+                                                }
+                                            }                                                                                       
+                                            for (int k = fromThisNumberOfSidePot; k < toThisNumberOfSidePot; k++) {                                                
+                                                sidePotsTogether += sidePots[k];
+                                            }
+                                            fromThisNumberOfSidePot += (moveByNumberOfSidePots - 1);
+                                            //pokud nevznikl žádný side pot, hráč vyhraje main pot (main pot je vždy jen jeden)
+                                            //rozdělování výher
+                                            playerChips[winnerNumber[0]] += sidePotsTogether;
+                                            if (s == 0) {
+                                                playerChips[winnerNumber[0]] += mainPot;
+                                                winning = mainPot + sidePotsTogether;
+                                            } else {
+                                                winning = sidePotsTogether;
+                                            }
+                                            Console.WriteLine("Winner: " + playersNames[winnerNumber[0]] + ": " + winning + " chips");                                                                                        
+                                        }
+                                        numberOfSameHighestCombinationFirstHeight = numberOfSameCardOutOfCombination;
+                                    }
+                                }
+                                //pokud má více hráčů úplně stejnou karetní kombinaci, nastává remíza, výhra se dělí
+                                if (numberOfSameCardOutOfCombination > 1) {
+                                    numberOfGroupsOfPlayersWithSameBetAndCombination = 1;
+                                    numberFromPlayerWinningDivide = 0;
+                                    winnings = new long[numberOfSameCardOutOfCombination];
+                                    numberOfPlayersToDivideWinning = numberOfSameCardOutOfCombination;
+                                    for (int i = 0; i < numberOfSameCardOutOfCombination; i++) {
+                                        winnerNumber[i] = cardOutOfCombinationWinner[i];
+                                    }
+                                    //určení čísla hráče, který má největší sázku při remíze
+                                    for (int k = 0; k < numberOfActivePlayers; k++) {
+                                            for (int l = 0; l < numberOfSameHighestCombinationFirstHeight; l++) {
+                                                if (idNumberOfPlayerOrderedByBet[k] == winnerNumber[l]) {
+                                                    if (k > idNumberOfPlayerOrderedByBetWithHighestBetWhenTie) {
+                                                        idNumberOfPlayerOrderedByBetWithHighestBetWhenTie = k;
+                                                    }
+                                                }
+                                            }
+                                        }                                   
+                                    for (int k = 0; k < numberOfActivePlayers; k++) {
+                                        //hráč nemůže vyhrát dané side poty, protože má nízkou výši sázky
+                                        if (k <= idNumberOfPlayerOrderedByBetWithHighestBetWhenTie) {
+                                                isOneOfTheWinnersOrCantWin[idNumberOfPlayerOrderedByBet[k]] = true;
+                                            }
+                                        //hráč je jedním z vítězů daných side potů, protože má výherní kombinaci a vsadil stejně jako jiný vítěz
+                                        if (playerBet[idNumberOfPlayerOrderedByBetWithHighestBetWhenTie] == playerBet[k]) {
+                                                isOneOfTheWinnersOrCantWin[k] = true;
+                                            }
+                                        }
+                                    //určení, kolik je skupin hráčů se stejnou sázkou a karetní kombinací
+                                    for (int t = 0; t < numberOfSameHighestCombinationFirstHeight - 1; t++) {
+                                        if (playerBet[idNumberOfPlayerOrderedByBet[t]] < playerBet[idNumberOfPlayerOrderedByBet[t + 1]]) {
+                                            numberOfGroupsOfPlayersWithSameBetAndCombination++;
+                                        }
+                                    }
+                                    //určení, o kolik hráčů se bude posouvat
+                                    for (int t = 0; t < numberOfGroupsOfPlayersWithSameBetAndCombination; t++) {
+                                        sidePotsTogether = 0;
+                                        playerShift = 1;
+                                        playerShiftEnd = false;
+                                        for (int u = numberFromPlayerWinningDivide; u < numberOfSameHighestCombinationFirstHeight - 1; u++) {
+                                            if (playerShiftEnd == false) {
+                                                if (playerBet[idNumberOfPlayerOrderedByBet[u]] == playerBet[idNumberOfPlayerOrderedByBet[u + 1]]) {
+                                                    playerShift++;
+                                                } else {
+                                                    playerShiftEnd = true;
+                                                }
+                                            }
+                                        }
+                                        for (int k = 0; k <= numberOfSidePots; k++) {
+                                            if (idNumberOfPlayerOrderedByBetWithHighestBetWhenTie >= numberToIdentifyContestants[k]) {
+                                                //vyřazení side potů, které už byly vyhrány
+                                                moveByNumberOfSidePots = k + 1;                                                
+                                            }
+                                        }
+                                        for (int k = fromThisNumberOfSidePot; k < toThisNumberOfSidePot; k++) {
+                                            sidePotsTogether += sidePots[k];
+                                        }
+                                        //došlo k rovnosti, je více konečných vítězů, výhra (main pot a případné side poty) se rozděluje mezi vítěze                              
+                                        if (s == 0 && numberFromPlayerWinningDivide == 0) {
+                                            for (int k = numberFromPlayerWinningDivide; k < numberOfSameHighestCombinationFirstHeight; k++) {
+                                                winnings[k] += (mainPot + sidePotsTogether) / numberOfPlayersToDivideWinning;
+                                            }
+                                        } else {
+                                            for (int k = numberFromPlayerWinningDivide; k < numberOfSameHighestCombinationFirstHeight; k++) {
+                                                winnings[k] += sidePotsTogether / numberOfPlayersToDivideWinning;
+                                            }
+                                        }
+                                        fromThisNumberOfSidePot += (moveByNumberOfSidePots - 2);
+                                        toThisNumberOfSidePot += (moveByNumberOfSidePots - 1);
+                                        //postupně se čím dál méně hráčů dělí o side poty
+                                        numberOfPlayersToDivideWinning -= playerShift;
+                                        numberFromPlayerWinningDivide += playerShift;
+                                    }                                                                     
+                                    for (int i = 0; i < numberOfSameHighestCombinationFirstHeight; i++) {
+                                        playerChips[winnerNumber[i]] += winnings[i];
+                                        Console.WriteLine("Winner: " + playersNames[winnerNumber[i]] + ": " + winnings[i] + " chips");
+                                    }                                    
+                                }
+                                //pokud je typ karetní kombinace u složen z pěti karet a úplně stejnou kombinaci má více hráčů, nastává remíza, výhra se dělí
+                            } else {
+                                numberOfGroupsOfPlayersWithSameBetAndCombination = 1;
+                                numberFromPlayerWinningDivide = 0;
+                                winnings = new long[numberOfSameHighestCombinationFirstHeight];
+                                numberOfPlayersToDivideWinning = numberOfSameHighestCombinationFirstHeight;
+                                for (int i = 0; i < numberOfSameHighestCombinationFirstHeight; i++) {
+                                    winnerNumber[i] = combinationCardHeightWinner[i];
+                                }
+                                //určení čísla hráče, který má největší sázku při rovnosti karetních kombinací
+                                for (int k = 0; k < numberOfActivePlayers; k++) {
+                                        for (int l = 0; l < numberOfSameHighestCombinationFirstHeight; l++) {
+                                            if (idNumberOfPlayerOrderedByBet[k] == winnerNumber[l]) {
+                                                if (k > idNumberOfPlayerOrderedByBetWithHighestBetWhenTie) {
+                                                    idNumberOfPlayerOrderedByBetWithHighestBetWhenTie = k;
+                                                }
+                                            }
+                                        }
+                                    }                               
+                                for (int k = 0; k < numberOfActivePlayers; k++) {
+                                    //hráč nemůže vyhrát dané side poty, protože má nízkou výši sázky
+                                    if (k <= idNumberOfPlayerOrderedByBetWithHighestBetWhenTie) {
+                                            isOneOfTheWinnersOrCantWin[idNumberOfPlayerOrderedByBet[k]] = true;
+                                        }
+                                    //hráč je jedním z vítězů daných side potů, protože má výherní kombinaci a vsadil stejně jako jiný vítěz
+                                    if (playerBet[idNumberOfPlayerOrderedByBetWithHighestBetWhenTie] == playerBet[k]) {
+                                            isOneOfTheWinnersOrCantWin[k] = true;
+                                        }
+                                    }
+                                //určení, kolik je skupin hráčů se stejnou sázkou a karetní kombinací
+                                for (int t = 0; t < numberOfSameHighestCombinationFirstHeight - 1; t++) {
+                                    if (playerBet[idNumberOfPlayerOrderedByBet[t]] < playerBet[idNumberOfPlayerOrderedByBet[t + 1]]) {
+                                        numberOfGroupsOfPlayersWithSameBetAndCombination++;
+                                    }
+                                }
+                                //určení, o kolik hráčů se bude posouvat
+                                for (int t = 0; t < numberOfGroupsOfPlayersWithSameBetAndCombination; t++) {
+                                    sidePotsTogether = 0;
+                                    playerShift = 1;
+                                    playerShiftEnd = false;
+                                    for (int u = numberFromPlayerWinningDivide; u < numberOfSameHighestCombinationFirstHeight - 1; u++) {
+                                        if (playerShiftEnd == false) {
+                                            if (playerBet[idNumberOfPlayerOrderedByBet[u]] == playerBet[idNumberOfPlayerOrderedByBet[u + 1]]) {
+                                                playerShift++;
+                                            } else {
+                                                playerShiftEnd = true;
+                                            }
+                                        }
+                                    }
+                                    for (int k = 0; k <= numberOfSidePots; k++) {
+                                        if (idNumberOfPlayerOrderedByBetWithHighestBetWhenTie >= numberToIdentifyContestants[k]) {
+                                            //vyřazení side potů, které už byly vyhrány
+                                            moveByNumberOfSidePots = k + 1;                                            
+                                        }
+                                    }
+                                    for (int k = fromThisNumberOfSidePot; k < toThisNumberOfSidePot; k++) {
+                                        sidePotsTogether += sidePots[k];
+                                    }
+                                    //došlo k rovnosti, je více konečných vítězů, výhra (main pot a případné side poty) se rozděluje mezi vítěze                       
+                                    if (s == 0 && numberFromPlayerWinningDivide == 0) {
+                                        for (int k = numberFromPlayerWinningDivide; k < numberOfSameHighestCombinationFirstHeight; k++) {
+                                            winnings[k] += (mainPot + sidePotsTogether) / numberOfPlayersToDivideWinning;
+                                        }
+                                    } else {
+                                        for (int k = numberFromPlayerWinningDivide; k < numberOfSameHighestCombinationFirstHeight; k++) {
+                                            winnings[k] += sidePotsTogether / numberOfPlayersToDivideWinning;
+                                        }
+                                    }
+                                    fromThisNumberOfSidePot += (moveByNumberOfSidePots - 2);
+                                    toThisNumberOfSidePot += (moveByNumberOfSidePots - 1);
+                                    //postupně se čím dál méně hráčů dělí o side poty
+                                    numberOfPlayersToDivideWinning -= playerShift;
+                                    numberFromPlayerWinningDivide += playerShift;
+                                }                                                                 
+                                for (int i = 0; i < numberOfSameHighestCombinationFirstHeight; i++) {
+                                    playerChips[winnerNumber[i]] += winnings[i];
+                                    Console.WriteLine("Winner: " + playersNames[winnerNumber[i]] + ": " + winnings[i] + " chips");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            //výpis oznamující vrácení nezavolané sázky
+            writingOfReturningUncalledBet(ref uncalledBet, ref isUncalledBet);
+            Console.WriteLine();
+            //výpis počtu žetonů jednotlivých hráčů
+            for (int n = 0; n < numberOfActivePlayers; n++) {
+                Console.WriteLine("Player " + playersNames[n] + ": " + playerChips[n] + " chips");
+            }
+        }
+        static void Main(string[] args) {
+            Card[] MixedCards2 = new Card[52]; Card[] RiverCards2 = new Card[5]; long startingChips;
+            long smallBlindValue, bigBlindValue; long mainPot = 0; int playerStartsNextPhase;
+
+            //definiční hodnoty karet
+            Card c1 = new Card("2(H)", 2, 'H'); Card c2 = new Card("3(H)", 3, 'H'); Card c3 = new Card("4(H)", 4, 'H'); Card c4 = new Card("5(H)", 5, 'H');
+            Card c5 = new Card("6(H)", 6, 'H'); Card c6 = new Card("7(H)", 7, 'H'); Card c7 = new Card("8(H)", 8, 'H'); Card c8 = new Card("9(H)", 9, 'H');
+            Card c9 = new Card("10(H)", 10, 'H'); Card c10 = new Card("J(H)", 11, 'H'); Card c11 = new Card("Q(H)", 12, 'H'); Card c12 = new Card("K(H)", 13, 'H');
+            Card c13 = new Card("A(H)", 14, 'H'); Card c14 = new Card("2(D)", 2, 'D'); Card c15 = new Card("3(D)", 3, 'D'); Card c16 = new Card("4(D)", 4, 'D');
+            Card c17 = new Card("5(D)", 5, 'D'); Card c18 = new Card("6(D)", 6, 'D'); Card c19 = new Card("7(D)", 7, 'D'); Card c20 = new Card("8(D)", 8, 'D');
+            Card c21 = new Card("9(D)", 9, 'D'); Card c22 = new Card("10(D)", 10, 'D'); Card c23 = new Card("J(D)", 11, 'D'); Card c24 = new Card("Q(D)", 12, 'D');
+            Card c25 = new Card("K(D)", 13, 'D'); Card c26 = new Card("A(D)", 14, 'D'); Card c27 = new Card("2(S)", 2, 'S'); Card c28 = new Card("3(S)", 3, 'S');
+            Card c29 = new Card("4(S)", 4, 'S'); Card c30 = new Card("5(S)", 5, 'S'); Card c31 = new Card("6(S)", 6, 'S'); Card c32 = new Card("7(S)", 7, 'S');
+            Card c33 = new Card("8(S)", 8, 'S'); Card c34 = new Card("9(S)", 9, 'S'); Card c35 = new Card("10(S)", 10, 'S'); Card c36 = new Card("J(S)", 11, 'S');
+            Card c37 = new Card("Q(S)", 12, 'S'); Card c38 = new Card("K(S)", 13, 'S'); Card c39 = new Card("A(S)", 14, 'S'); Card c40 = new Card("2(C)", 2, 'C');
+            Card c41 = new Card("3(C)", 3, 'C'); Card c42 = new Card("4(C)", 4, 'C'); Card c43 = new Card("5(C)", 5, 'C'); Card c44 = new Card("6(C)", 6, 'C');
+            Card c45 = new Card("7(C)", 7, 'C'); Card c46 = new Card("8(C)", 8, 'C'); Card c47 = new Card("9(C)", 9, 'C'); Card c48 = new Card("10(C)", 10, 'C');
+            Card c49 = new Card("J(C)", 11, 'C'); Card c50 = new Card("Q(C)", 12, 'C'); Card c51 = new Card("K(C)", 13, 'C'); Card c52 = new Card("A(C)", 14, 'C');
+
+            CardsArray = new Card[52] {c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16,c17,c18,c19,c20,c21,c22,c23,c24,c25,c26,c27,c28,c29,c30,c31,
+            c32,c33,c34,c35,c36,c37,c38,c39,c40,c41,c42,c43,c44,c45,c46,c47,c48,c49,c50,c51,c52};
+
+            startingChips = 1000;
+            numberOfPlayersOK = false;
+            while (numberOfPlayersOK == false) {
+                Console.Write("Enter number of players (2-" + maxNumberOfPlayers + "): ");
+                try {
+                    numberOfPlayers = byte.Parse(Console.ReadLine());
+                    if (numberOfPlayers >= 2 && numberOfPlayers <= maxNumberOfPlayers) {
+                        numberOfPlayersOK = true;
+                    } else {
+                        numberOfPlayersOK = false;
+                        Console.WriteLine("Incorrect number of players, enter again");
+                    }
+                } catch (System.FormatException) { Console.WriteLine("Invalid sign entered, enter again"); } 
+                catch (System.OverflowException) { Console.WriteLine("Incorrect number of players, enter again"); }
+            }
+            numberOfActivePlayers = numberOfPlayers;
+            string[] combination = new string[numberOfPlayers];
+            playersNames = new string[numberOfPlayers];
+            playerChips = new long[numberOfPlayers];
+            hasFolded = new bool[numberOfActivePlayers];
+            isAllIn = new bool[numberOfActivePlayers];
+            playerBet = new long[numberOfActivePlayers];
+            setDefaultPlayerOut(ref isPlayerOut);
+            bool isSamePlayerName = false;
+            for (byte i = 0; i < numberOfPlayers; i++) {
+                playerChips[i] = startingChips;
+            }
+            
+            for (byte i = 0; i < numberOfPlayers; i++) {
+                do {
+                    Console.Write("Enter name for player " + (i + 1) + ": ");
+                    try {
+                        playersNames[i] = Console.ReadLine();
+                        if (playersNames[i].Length == 0) {
+                            throw new EmptyNameException("");
+                        }
+                        isSamePlayerName = false;
+                        for (int j = 0; j < i; j++) {
+                            if (playersNames[i] == playersNames[j]) {
+                                isSamePlayerName = true;
+                                throw new SameNameException("");                                
+                            }
+                        }
+                    } catch (EmptyNameException) { Console.WriteLine("Name can't be empty"); } 
+                    catch (SameNameException) { Console.WriteLine("Name must be unique"); }
+                } while (playersNames[i].Length == 0 || isSamePlayerName == true);
+            }                            
+            string action = "";
+            Card[,] players3 = new Card[numberOfPlayers, playerCards2];            
+            identifyDealer(ref MixedCards2, ref dealerNumber, ref hasSmallBlind, ref hasBigBlind);
+            Console.Write("Cards to select dealer: ");
+            for (int i = 0; i < numberOfActivePlayers; i++) {
+                Console.Write(MixedCards2[i].cardDescription + " ");
+            }
+            Console.WriteLine();            
+            Console.WriteLine("Dealer is player number " + (dealerNumber + 1));
+            smallBlindValue = 10; bigBlindValue = smallBlindValue * 2;            
+            long callBet = 0; long raiseBet = 0;
+            System.Threading.Thread.Sleep(100);
+            do {
+                playerBet = new long[numberOfActivePlayers];
+                setBlinds(playerChips, playerBet, smallBlindValue, bigBlindValue, dealerNumber);
+                identifyPositionOfPlayers(ref positionOfPlayersInTurn, ref hasBigBlind);
+                setDefaultFoldAndAllIn();
+                callBet = bigBlindValue;
+                previousRaise = bigBlindValue;
+                playerStartsNextPhase = 0;
+                hasAllExceptOneFolds = false;
+                cardMixing(ref MixedCards2);                               
+                handCards(numberOfActivePlayers, MixedCards2, ref players3);
+                Console.WriteLine();
+                for (byte i = 0; i < numberOfActivePlayers; i++) {
+                    Console.Write("Player " + playersNames[i] + ": ");
+                    for (byte j = 0; j < playerCards; j++) {
+                        Console.Write(players3[i,j].cardDescription + " ");
+                    }
+                    Console.WriteLine();
+                }
+                mainPot = 0;
+                subtractBlinds(ref playerChips, ref playerBet, ref mainPot);
+                identifyPositionOfPlayersWhere2PlayersPreFlop();
+                //jednotlivé fáze hry
+                preFlop(MixedCards2, numberOfActivePlayers);
+                playerAction(ref callBet, raiseBet, ref playersNames, ref hasFolded, ref isAllIn, ref playerBet, ref playerChips, ref mainPot, 
+                    ref smallBlindValue, ref bigBlindValue, ref players3, ref playerStartsNextPhase, ref isPlayerOut, ref isUncalledBet, 
+                    ref numberOfPlayerWithUncalledBet, ref hasAllExceptOneFolds);
+                identifyPositionOfPlayersWhere2PlayersAfterPreFlop();
+                flop(MixedCards2, numberOfActivePlayers, ref hasAllExceptOneFolds);
+                playerAction(ref callBet, raiseBet, ref playersNames, ref hasFolded, ref isAllIn, ref playerBet, ref playerChips, ref mainPot,
+                    ref smallBlindValue, ref bigBlindValue, ref players3, ref playerStartsNextPhase, ref isPlayerOut, ref isUncalledBet, 
+                    ref numberOfPlayerWithUncalledBet, ref hasAllExceptOneFolds);
+                turn(MixedCards2, numberOfActivePlayers, ref hasAllExceptOneFolds);
+                playerAction(ref callBet, raiseBet, ref playersNames, ref hasFolded, ref isAllIn, ref playerBet, ref playerChips, ref mainPot,
+                    ref smallBlindValue, ref bigBlindValue, ref players3, ref playerStartsNextPhase, ref isPlayerOut, ref isUncalledBet, 
+                    ref numberOfPlayerWithUncalledBet, ref hasAllExceptOneFolds);
+                river(out RiverCards2, MixedCards2, numberOfActivePlayers, ref hasAllExceptOneFolds);
+                playerAction(ref callBet, raiseBet, ref playersNames, ref hasFolded, ref isAllIn, ref playerBet, ref playerChips, ref mainPot,
+                    ref smallBlindValue, ref bigBlindValue, ref players3, ref playerStartsNextPhase, ref isPlayerOut, ref isUncalledBet, 
+                    ref numberOfPlayerWithUncalledBet, ref hasAllExceptOneFolds);
+                if (hasAllExceptOneFolds == true) {
+                    for (int j = 0; j < numberOfActivePlayers; j++) {
+                        Console.WriteLine("Player " + playersNames[j] + ": " + playerChips[j] + " chips");
+                    }
+                }
+                if (hasAllExceptOneFolds == false) {
+                    string foldWrite = "";
+                    for (int j = 0; j < numberOfActivePlayers; j++) {
+                        if (hasFolded[j] == true) {
+                            foldWrite = ", folded";
+                        } else {
+                            foldWrite = "";
+                        }
+                        Console.WriteLine("Player " + playersNames[j] + ": " + playerChips[j] + " chips, bet: " + playerBet[j] + foldWrite);
+                    }               
+                    Console.WriteLine("Pots: " + mainPot);
+                    //určení karetních kombinací hráčů
+                    setInitialCombinationStrength(numberOfActivePlayers, ref combinationStrength);
+                    identifyValues(ref values, ref RiverCards2, ref players3, numberOfActivePlayers);
+                    identifyColors(ref playerColors, ref colors, ref colorsNames, ref RiverCards2, ref players3, numberOfActivePlayers);
+                    identifyHighCard(ref RiverCards2, ref players3, numberOfActivePlayers, ref combinationStrength, ref combinationHighCardHeight);
+                    identifyOnePairThreeOfAKindFourOfAKind(ref values, ref RiverCards2, ref players3, numberOfActivePlayers,
+                    playerCards2, ref combinationStrength, ref combinationOnePairCardHeight, ref combinationThreeOfAKindCardHeight, 
+                    ref combinationFourOfAKindCardHeight);
+                    identifyTwoPairs(ref values, ref RiverCards2, ref players3, numberOfActivePlayers,
+                        playerCards2, ref combinationStrength, ref combinationTwoPairsCardHeight);
+                    identifyStraight(ref values, ref RiverCards2, ref players3, numberOfActivePlayers,
+                        playerCards2, ref combinationStrength, ref combinationStraightCardHeight, ref isStraight);
+                    identifyFlush(ref playerColors, ref colorsNames, ref values, ref RiverCards2, ref players3, numberOfActivePlayers, playerCards2,
+                        ref combinationStrength, ref combinationFlushCardHeight, ref flushCardsValues, ref isFlush, ref numberOfFlushCards, ref flushColor);
+                    identifyFullHouse(ref values, ref RiverCards2, ref players3, numberOfActivePlayers,
+                        playerCards2, ref combinationStrength, ref combinationFullHouseCardsHeight);
+                    identifyStraightFlushAndRoyalFlush(ref RiverCards2, ref players3, numberOfActivePlayers, playerCards2, ref combinationStrength,
+                        ref combinationStraightFlushCardHeight, ref flushCardsValues, ref isFlush, ref isStraight, ref numberOfFlushCards);                   
+                    identifyPlayerCardsNotInCombination(ref RiverCards2, ref players3, numberOfActivePlayers, ref combinationStrength,
+                         ref combinationHighCardHeight, ref combinationOnePairCardHeight, ref combinationTwoPairsCardHeight,
+                         ref combinationThreeOfAKindCardHeight, ref combinationFourOfAKindCardHeight, ref isTableCardInCombination, ref isPlayerCardInCombination);
+                    writeCombination(ref combinationStrength, combination, numberOfActivePlayers, playersNames, ref playerChips);
+                    uncalledBetReturn(ref hasFolded, ref playerBet, ref playerChips, ref mainPot, ref isUncalledBet, ref numberOfPlayerWithUncalledBet,
+                        ref uncalledBet, ref isAnySidePot);
+                    identifySidePots(ref playerBet, ref hasFolded, ref sidePots, ref mainPot, ref numberOfSidePots,
+                        ref idNumberOfPlayerOrderedByBet, ref numberToIdentifyContestants, ref isAnySidePot);
+                    identifyWinner(ref combinationStrength, ref combinationHighCardHeight, ref combinationOnePairCardHeight, ref combinationTwoPairsCardHeight, 
+                        ref combinationThreeOfAKindCardHeight, ref combinationStraightCardHeight, ref combinationFlushCardHeight, 
+                        ref combinationFullHouseCardsHeight, ref combinationFourOfAKindCardHeight, ref combinationStraightFlushCardHeight, 
+                        ref isTableCardInCombination, ref isPlayerCardInCombination, ref RiverCards2, ref players3, ref winnerNumber, ref mainPot, 
+                        ref playerChips, ref hasFolded, ref numberOfSidePots, ref sidePots, ref idNumberOfPlayerOrderedByBet, ref numberToIdentifyContestants, 
+                        ref numberOfPlayerWithUncalledBet, ref playerBet);
+                }                
+                identifyPlayerOut(ref isPlayerOut, ref playerChips);
+                decreaseNumberOfActivePlayers(ref playerChips);
+                identifyWinnerOfTournament(ref isWinnerOfTournament);
+                if (isWinnerOfTournament == false) {
+                    moveDealer();
+                    setPlayerOutFalse();
+                    Console.WriteLine("\nPress n for next round ");
+                    action = Console.ReadLine();
+                }
+            }
+            while (action == "n" && isWinnerOfTournament == false);
+            Console.ReadKey();
+        }
+    }
+}
+
+
